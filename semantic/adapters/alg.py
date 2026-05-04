@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from math import radians
+from math import radians, sqrt
 from typing import Iterable
 
 from aurora_translator.semantic.adapters.utils import (
@@ -12,7 +12,6 @@ from aurora_translator.semantic.adapters.utils import (
     unique_append,
 )
 from aurora_translator.semantic.models import (
-    SemanticArcGeometry,
     SemanticBoard,
     SemanticComponent,
     SemanticDiagnostic,
@@ -25,7 +24,6 @@ from aurora_translator.semantic.models import (
     SemanticPadGeometry,
     SemanticPin,
     SemanticPoint,
-    SemanticPolygonVoidGeometry,
     SemanticPrimitive,
     SemanticPrimitiveGeometry,
     SemanticShape,
@@ -63,6 +61,7 @@ def from_alg(payload: ALGLayout, *, build_connectivity: bool = True) -> Semantic
     materials, material_ids_by_key = _semantic_materials(payload)
     layers = _semantic_layers(payload, material_ids_by_key)
     metal_layer_names = [layer.name for layer in layers if _is_metal_layer(layer)]
+    layer_sides_by_name = _layer_sides_by_name(layers)
     top_layer = _top_layer_name(layers)
     bottom_layer = _bottom_layer_name(layers)
 
@@ -85,6 +84,20 @@ def from_alg(payload: ALGLayout, *, build_connectivity: bool = True) -> Semantic
     symbols_by_refdes = _symbols_by_refdes(payload)
     pins_by_refdes_pin = _pins_by_refdes_pin(payload)
     source_pads_by_refdes_pin = _pads_by_refdes_pin(payload)
+    padstacks_by_name = _padstacks_by_name(payload.padstacks or [], metal_layer_names)
+    padstack_shapes_by_layer, padstack_shapes_by_name = _padstack_simple_pad_shapes(
+        payload.pads or []
+    )
+    component_layers_by_refdes = _component_layers_by_refdes(
+        payload,
+        components_by_refdes,
+        symbols_by_refdes,
+        source_pads_by_refdes_pin,
+        padstacks_by_name,
+        metal_layer_names,
+        top_layer,
+        bottom_layer,
+    )
 
     footprints = _semantic_footprints(components_by_refdes)
     footprint_ids_by_name = {footprint.name: footprint.id for footprint in footprints}
@@ -92,6 +105,8 @@ def from_alg(payload: ALGLayout, *, build_connectivity: bool = True) -> Semantic
         components_by_refdes,
         symbols_by_refdes,
         pins_by_refdes_pin,
+        component_layers_by_refdes,
+        layer_sides_by_name,
         footprint_ids_by_name,
         top_layer,
         bottom_layer,
@@ -110,12 +125,15 @@ def from_alg(payload: ALGLayout, *, build_connectivity: bool = True) -> Semantic
     pins: list[SemanticPin] = []
     pads: list[SemanticPad] = []
     pin_ids_by_key: dict[tuple[str, str], str] = {}
+    pin_ids_by_component: dict[str, list[str]] = defaultdict(list)
     component_pad_ids: dict[str, list[str]] = defaultdict(list)
     footprint_pad_ids: dict[str, list[str]] = defaultdict(list)
     _semantic_pins_and_pads(
         payload,
         pins_by_refdes_pin,
         source_pads_by_refdes_pin,
+        padstack_shapes_by_layer,
+        padstack_shapes_by_name,
         components_by_refdes,
         component_ids_by_refdes,
         component_layers_by_refdes,
@@ -127,13 +145,14 @@ def from_alg(payload: ALGLayout, *, build_connectivity: bool = True) -> Semantic
         pins,
         pads,
         pin_ids_by_key,
+        pin_ids_by_component,
         component_pad_ids,
         footprint_pad_ids,
         diagnostics,
     )
 
     for component in components:
-        component.pin_ids = [pin.id for pin in pins if pin.component_id == component.id]
+        component.pin_ids = pin_ids_by_component.get(component.id, [])
         component.pad_ids = component_pad_ids.get(component.id, [])
     for footprint in footprints:
         footprint.pad_ids = footprint_pad_ids.get(footprint.id, [])
@@ -370,6 +389,12 @@ def _bottom_layer_name(layers: list[SemanticLayer]) -> str | None:
     return layers[-1].name if layers else None
 
 
+def _layer_sides_by_name(layers: Iterable[SemanticLayer]) -> dict[str, str | None]:
+    return {
+        layer.name.casefold(): layer.side for layer in layers if layer.name is not None
+    }
+
+
 def _components_by_refdes(payload: ALGLayout) -> dict[str, ALGComponent]:
     result = {component.refdes: component for component in payload.components or []}
     for pin in payload.pins or []:
@@ -402,6 +427,214 @@ def _pads_by_refdes_pin(payload: ALGLayout) -> dict[tuple[str, str], list[ALGPad
     return result
 
 
+def _padstack_simple_pad_shapes(
+    pads: Iterable[ALGPad],
+) -> tuple[dict[tuple[str, str], ALGShape], dict[str, ALGShape]]:
+    shapes_by_layer: dict[
+        tuple[str, str], dict[tuple[str, float, float], tuple[int, ALGShape]]
+    ] = {}
+    shapes_by_name: dict[str, dict[tuple[str, float, float], tuple[int, ALGShape]]] = {}
+    for pad in pads:
+        if not _is_regular_pad_type(pad.pad_type):
+            continue
+        padstack_name = (pad.pad_stack_name or "").casefold()
+        if not padstack_name:
+            continue
+        signature = _simple_pad_shape_signature(pad.shape)
+        if signature is None:
+            continue
+        if pad.layer_name:
+            _record_padstack_shape(
+                shapes_by_layer,
+                (padstack_name, pad.layer_name.casefold()),
+                signature,
+                pad.shape,
+            )
+        _record_padstack_shape(shapes_by_name, padstack_name, signature, pad.shape)
+    return (
+        {
+            key: _most_common_padstack_shape(candidates)
+            for key, candidates in shapes_by_layer.items()
+        },
+        {
+            key: _most_common_padstack_shape(candidates)
+            for key, candidates in shapes_by_name.items()
+        },
+    )
+
+
+def _record_padstack_shape(
+    shapes: dict[object, dict[tuple[str, float, float], tuple[int, ALGShape]]],
+    key: object,
+    signature: tuple[str, float, float],
+    shape: ALGShape,
+) -> None:
+    candidates = shapes.setdefault(key, {})
+    count, first_shape = candidates.get(signature, (0, shape))
+    candidates[signature] = (count + 1, first_shape)
+
+
+def _most_common_padstack_shape(
+    candidates: dict[tuple[str, float, float], tuple[int, ALGShape]],
+) -> ALGShape:
+    return max(
+        candidates.items(),
+        key=lambda item: (item[1][0], item[0]),
+    )[1][1]
+
+
+def _simple_pad_shape_signature(
+    shape: ALGShape | None,
+) -> tuple[str, float, float] | None:
+    if shape is None:
+        return None
+    kind = (shape.kind or "").upper()
+    if kind in {"", "LINE", "ARC"}:
+        return None
+    width = abs(shape.width or 0.0)
+    height = abs(shape.height if shape.height is not None else width)
+    if width <= 0.0 or height <= 0.0:
+        return None
+    if kind in {"SQUARE", "FIG_SQUARE"}:
+        side = max(width, height)
+        width = side
+        height = side
+    if kind in {"CIRCLE", "FIG_CIRCLE"}:
+        height = width
+    return kind, round(width, 9), round(height, 9)
+
+
+def _component_layers_by_refdes(
+    payload: ALGLayout,
+    components_by_refdes: dict[str, ALGComponent],
+    symbols_by_refdes: dict[str, ALGSymbol],
+    source_pads_by_refdes_pin: dict[tuple[str, str], list[ALGPad]],
+    padstacks_by_name: dict[str, ALGPadstack],
+    metal_layer_names: list[str],
+    top_layer: str | None,
+    bottom_layer: str | None,
+) -> dict[str, str | None]:
+    pins_by_refdes: dict[str, list[ALGPin]] = defaultdict(list)
+    for pin in payload.pins or []:
+        if pin.refdes:
+            pins_by_refdes[pin.refdes].append(pin)
+
+    result: dict[str, str | None] = {}
+    for refdes in components_by_refdes:
+        initial_layer = _initial_component_layer(
+            symbols_by_refdes.get(refdes),
+            top_layer,
+            bottom_layer,
+        )
+        result[refdes] = _component_layer_from_pin_pads(
+            initial_layer,
+            pins_by_refdes.get(refdes, []),
+            source_pads_by_refdes_pin,
+            padstacks_by_name,
+            metal_layer_names,
+        )
+    return result
+
+
+def _initial_component_layer(
+    symbol: ALGSymbol | None,
+    top_layer: str | None,
+    bottom_layer: str | None,
+) -> str | None:
+    return bottom_layer if symbol and symbol.mirror else top_layer
+
+
+def _component_layer_from_pin_pads(
+    initial_layer: str | None,
+    pins: Iterable[ALGPin],
+    source_pads_by_refdes_pin: dict[tuple[str, str], list[ALGPad]],
+    padstacks_by_name: dict[str, ALGPadstack],
+    metal_layer_names: list[str],
+) -> str | None:
+    through_candidate: str | None = None
+    for pin in pins:
+        matching_pads = source_pads_by_refdes_pin.get((pin.refdes, pin.pin_number), [])
+        pad_layers = _regular_pad_layers_for_pin(
+            pin,
+            matching_pads,
+            padstacks_by_name,
+            metal_layer_names,
+        )
+        if not pad_layers:
+            continue
+        if _pin_spans_multiple_metal_layers(pin, matching_pads, padstacks_by_name):
+            if _same_layer(initial_layer, pad_layers[0]) or _same_layer(
+                initial_layer, pad_layers[-1]
+            ):
+                through_candidate = initial_layer
+                continue
+            if through_candidate is None:
+                through_candidate = pad_layers[0]
+            continue
+        return pad_layers[0]
+    return through_candidate or initial_layer
+
+
+def _regular_pad_layers_for_pin(
+    pin: ALGPin,
+    matching_pads: Iterable[ALGPad],
+    padstacks_by_name: dict[str, ALGPadstack],
+    metal_layer_names: list[str],
+) -> list[str]:
+    metal_layers_by_key = {
+        layer_name.casefold(): layer_name for layer_name in metal_layer_names
+    }
+    result: list[str] = []
+    for pad in matching_pads:
+        if not _is_regular_pad_type(pad.pad_type):
+            continue
+        layer_name = metal_layers_by_key.get((pad.layer_name or "").casefold())
+        if layer_name:
+            unique_append(result, layer_name)
+    if result:
+        return result
+
+    padstack = _pin_padstack(pin, matching_pads, padstacks_by_name)
+    return (
+        _via_template_layer_names(padstack, metal_layer_names, None) if padstack else []
+    )
+
+
+def _pin_spans_multiple_metal_layers(
+    pin: ALGPin,
+    matching_pads: Iterable[ALGPad],
+    padstacks_by_name: dict[str, ALGPadstack],
+) -> bool:
+    padstack = _pin_padstack(pin, matching_pads, padstacks_by_name)
+    if _padstack_spans_multiple_metal_layers(padstack):
+        return True
+    layer_keys = {
+        (pad.layer_name or "").casefold()
+        for pad in matching_pads
+        if _is_regular_pad_type(pad.pad_type) and pad.layer_name
+    }
+    return len(layer_keys) > 1
+
+
+def _pin_padstack(
+    pin: ALGPin,
+    matching_pads: Iterable[ALGPad],
+    padstacks_by_name: dict[str, ALGPadstack],
+) -> ALGPadstack | None:
+    for padstack_name in [
+        pin.pad_stack_name,
+        *(pad.pad_stack_name for pad in matching_pads),
+    ]:
+        padstack = padstacks_by_name.get(padstack_name or "")
+        if padstack is not None:
+            return padstack
+    return None
+
+
+def _same_layer(left: str | None, right: str | None) -> bool:
+    return bool(left and right and left.casefold() == right.casefold())
+
+
 def _semantic_footprints(
     components_by_refdes: dict[str, ALGComponent],
 ) -> list[SemanticFootprint]:
@@ -423,6 +656,8 @@ def _semantic_components(
     components_by_refdes: dict[str, ALGComponent],
     symbols_by_refdes: dict[str, ALGSymbol],
     pins_by_refdes_pin: dict[tuple[str, str], ALGPin],
+    component_layers_by_refdes: dict[str, str | None],
+    layer_sides_by_name: dict[str, str | None],
     footprint_ids_by_name: dict[str, str],
     top_layer: str | None,
     bottom_layer: str | None,
@@ -434,8 +669,10 @@ def _semantic_components(
     for index, (refdes, component) in enumerate(sorted(components_by_refdes.items())):
         symbol = symbols_by_refdes.get(refdes)
         mirror = bool(symbol and symbol.mirror)
-        side = "bottom" if mirror else "top"
-        layer_name = bottom_layer if mirror else top_layer
+        layer_name = component_layers_by_refdes.get(refdes)
+        if layer_name is None:
+            layer_name = bottom_layer if mirror else top_layer
+        side = _component_side_for_layer(layer_name, layer_sides_by_name, mirror)
         footprint_name = component.package or component.device_type or "ALG_FOOTPRINT"
         components.append(
             SemanticComponent(
@@ -458,6 +695,21 @@ def _semantic_components(
     return components
 
 
+def _component_side_for_layer(
+    layer_name: str | None,
+    layer_sides_by_name: dict[str, str | None],
+    mirror: bool,
+) -> str | None:
+    if layer_name:
+        side = layer_sides_by_name.get(layer_name.casefold())
+        if side:
+            return side
+        inferred_side = side_from_layer_name(layer_name)
+        if inferred_side:
+            return inferred_side
+    return "bottom" if mirror else "top"
+
+
 def _component_attributes(
     component: ALGComponent, symbol: ALGSymbol | None
 ) -> dict[str, str]:
@@ -476,10 +728,134 @@ def _component_attributes(
     return values
 
 
+def _semantic_pad_records(
+    matching_pads: Iterable[ALGPad],
+    padstack_shapes_by_layer: dict[tuple[str, str], ALGShape],
+    padstack_shapes_by_name: dict[str, ALGShape],
+) -> list[tuple[ALGPad, ALGShape | None, str]]:
+    groups: dict[tuple[str, str, str, str, str, str], list[ALGPad]] = {}
+    for pad in matching_pads:
+        groups.setdefault(_pad_geometry_group_key(pad), []).append(pad)
+
+    result: list[tuple[ALGPad, ALGShape | None, str]] = []
+    for group in groups.values():
+        source_pad = group[0]
+        shape = _effective_pad_shape(
+            group,
+            padstack_shapes_by_layer,
+            padstack_shapes_by_name,
+        )
+        geometry_source = (
+            "alg_full_geometry_pad"
+            if shape is source_pad.shape
+            else "alg_full_geometry_padstack_shape"
+        )
+        result.append((source_pad, shape, geometry_source))
+    return result
+
+
+def _pad_geometry_group_key(pad: ALGPad) -> tuple[str, str, str, str, str, str]:
+    shape_kind = (pad.shape.kind if pad.shape else "").upper()
+    record_group = (
+        _track_group_id_fast(pad.record_tag)
+        if shape_kind in {"LINE", "ARC"}
+        else pad.record_tag
+    )
+    return (
+        pad.layer_name or "",
+        pad.pad_stack_name or "",
+        pad.net_name or "",
+        _coordinate_key(pad.x),
+        _coordinate_key(pad.y),
+        record_group or "",
+    )
+
+
+def _effective_pad_shape(
+    group: list[ALGPad],
+    padstack_shapes_by_layer: dict[tuple[str, str], ALGShape],
+    padstack_shapes_by_name: dict[str, ALGShape],
+) -> ALGShape | None:
+    for pad in group:
+        if _simple_pad_shape_signature(pad.shape) is not None:
+            return pad.shape
+
+    representative = group[0]
+    padstack_shape = _padstack_lookup_shape(
+        representative,
+        padstack_shapes_by_layer,
+        padstack_shapes_by_name,
+    )
+    if padstack_shape is not None:
+        return padstack_shape
+    return _custom_pad_shape_from_segments(group)
+
+
+def _padstack_lookup_shape(
+    pad: ALGPad,
+    padstack_shapes_by_layer: dict[tuple[str, str], ALGShape],
+    padstack_shapes_by_name: dict[str, ALGShape],
+) -> ALGShape | None:
+    padstack_name = (pad.pad_stack_name or "").casefold()
+    if not padstack_name:
+        return None
+    if pad.layer_name:
+        shape = padstack_shapes_by_layer.get((padstack_name, pad.layer_name.casefold()))
+        if shape is not None:
+            return shape
+    return padstack_shapes_by_name.get(padstack_name)
+
+
+def _custom_pad_shape_from_segments(group: list[ALGPad]) -> ALGShape | None:
+    points: list[tuple[float, float]] = []
+    for pad in group:
+        shape = pad.shape
+        if shape is None:
+            continue
+        kind = (shape.kind or "").upper()
+        if kind not in {"LINE", "ARC"}:
+            continue
+        if (
+            shape.x is not None
+            and shape.y is not None
+            and shape.width is not None
+            and shape.height is not None
+        ):
+            points.append((shape.x, shape.y))
+            points.append((shape.width, shape.height))
+    if len(points) < 2:
+        return None
+
+    xs = [point[0] for point in points]
+    ys = [point[1] for point in points]
+    width = max(xs) - min(xs)
+    height = max(ys) - min(ys)
+    if width <= 0.0 or height <= 0.0:
+        return None
+    if len(group) >= 4 and abs(width - height) <= max(width, height) * 0.05:
+        side = max(width, height) / sqrt(2.0)
+        return ALGShape(kind="SQUARE", width=side, height=side)
+    return ALGShape(kind="FIG_RECTANGLE", width=width, height=height)
+
+
+def _alg_shape_footprint_rotation(shape: ALGShape | None) -> float:
+    if shape is None or shape.rotation is None:
+        return 0.0
+    return radians(float(shape.rotation))
+
+
+def _coordinate_key(value: float | int | None) -> str:
+    if value is None:
+        return ""
+    return f"{float(value):.6f}"
+
+
 def _semantic_pins_and_pads(
     payload: ALGLayout,
     pins_by_refdes_pin: dict[tuple[str, str], ALGPin],
     source_pads_by_refdes_pin: dict[tuple[str, str], list[ALGPad]],
+    padstack_shapes_by_layer: dict[tuple[str, str], ALGShape],
+    padstack_shapes_by_name: dict[str, ALGShape],
     components_by_refdes: dict[str, ALGComponent],
     component_ids_by_refdes: dict[str, str],
     component_layers_by_refdes: dict[str, str],
@@ -491,6 +867,7 @@ def _semantic_pins_and_pads(
     pins: list[SemanticPin],
     pads: list[SemanticPad],
     pin_ids_by_key: dict[tuple[str, str], str],
+    pin_ids_by_component: dict[str, list[str]],
     component_pad_ids: dict[str, list[str]],
     footprint_pad_ids: dict[str, list[str]],
     diagnostics: list[SemanticDiagnostic],
@@ -508,15 +885,24 @@ def _semantic_pins_and_pads(
         net_id = net_ids_by_name.get(_alg_net_name(pin.net_name))
         pin_id = semantic_id("pin", f"{refdes}:{pin_number}", index)
         pin_ids_by_key[(refdes, pin_number)] = pin_id
+        if component_id:
+            unique_append(pin_ids_by_component[component_id], pin_id)
         matching_pads = source_pads_by_refdes_pin.get((refdes, pin_number), [])
         pad_ids: list[str] = []
         if matching_pads:
-            for pad_index, source_pad in enumerate(matching_pads):
+            semantic_pads = _semantic_pad_records(
+                matching_pads,
+                padstack_shapes_by_layer,
+                padstack_shapes_by_name,
+            )
+            for pad_index, (source_pad, effective_shape, geometry_source) in enumerate(
+                semantic_pads
+            ):
                 pad_id = semantic_id(
                     "pad", f"{refdes}:{pin_number}:{source_pad.layer_name}:{pad_index}"
                 )
                 shape_id = _shape_id_for_alg_shape(
-                    source_pad.shape,
+                    effective_shape,
                     shapes,
                     shape_ids_by_key,
                     source_path="pads.shape",
@@ -530,13 +916,16 @@ def _semantic_pins_and_pads(
                     pin_id=pin_id,
                     net_id=net_ids_by_name.get(_alg_net_name(source_pad.net_name))
                     or net_id,
-                    layer_name=source_pad.layer_name or top_layer,
+                    layer_name=source_pad.layer_name or pin_layer_name or top_layer,
                     position=_xy_point(source_pad.x, source_pad.y)
                     or _xy_point(pin.x, pin.y),
                     padstack_definition=source_pad.pad_stack_name or pin.pad_stack_name,
                     geometry=SemanticPadGeometry(
                         shape_id=shape_id,
-                        source="alg_full_geometry_pad",
+                        source=geometry_source,
+                        footprint_rotation=_alg_shape_footprint_rotation(
+                            effective_shape
+                        ),
                     ),
                     source=source_ref("alg", "pads", f"{refdes}:{pin_number}"),
                 )
@@ -561,7 +950,7 @@ def _semantic_pins_and_pads(
                     component_id=component_id,
                     pin_id=pin_id,
                     net_id=net_id,
-                    layer_name=top_layer,
+                    layer_name=pin_layer_name or top_layer,
                     position=_xy_point(pin.x, pin.y),
                     padstack_definition=pin.pad_stack_name,
                     geometry=SemanticPadGeometry(
@@ -897,7 +1286,7 @@ def _semantic_primitives(
         geometry_role = (track.geometry_role or "").strip().upper()
 
         if geometry_role == "SHAPE" and track.kind in {"line", "arc"}:
-            group_id = _track_group_id(track.record_tag)
+            group_id = _track_group_id_fast(track.record_tag)
             if group_id is not None:
                 group = shape_groups.setdefault(
                     group_id,
@@ -915,8 +1304,7 @@ def _semantic_primitives(
             continue
 
         if geometry_role == "VOID" and track.kind in {"line", "arc"}:
-            group_id = _track_group_id(track.record_tag)
-            region_id = _track_region_id(track.record_tag)
+            group_id, region_id = _track_group_region_id(track.record_tag)
             if group_id is not None and region_id is not None:
                 void_groups[group_id].setdefault(region_id, []).append((index, track))
             continue
@@ -925,7 +1313,7 @@ def _semantic_primitives(
         net_id = net_ids_by_name.get(net_name)
         if track.kind == "line" and track.start and track.end:
             primitives.append(
-                SemanticPrimitive(
+                SemanticPrimitive.model_construct(
                     id=semantic_id("primitive", f"track:{index}"),
                     kind="trace",
                     layer_name=track.layer_name,
@@ -943,7 +1331,7 @@ def _semantic_primitives(
             )
         elif track.kind == "arc" and track.start and track.end and track.center:
             primitives.append(
-                SemanticPrimitive(
+                SemanticPrimitive.model_construct(
                     id=semantic_id("primitive", f"arc:{index}"),
                     kind="arc",
                     layer_name=track.layer_name,
@@ -963,7 +1351,7 @@ def _semantic_primitives(
         elif track.kind == "rectangle" and track.bbox:
             bbox = track.bbox
             primitives.append(
-                SemanticPrimitive(
+                SemanticPrimitive.model_construct(
                     id=semantic_id("primitive", f"rect:{index}"),
                     kind="polygon",
                     layer_name=track.layer_name,
@@ -990,7 +1378,7 @@ def _semantic_primitives(
         if len(raw_points) < 2:
             continue
 
-        voids: list[SemanticPolygonVoidGeometry] = []
+        voids: list[dict[str, object]] = []
         for region_id, region_segments in sorted(
             void_groups.get(group_id, {}).items(),
             key=lambda item: _numeric_key(item[0]),
@@ -999,7 +1387,7 @@ def _semantic_primitives(
             if len(void_raw_points) < 2:
                 continue
             voids.append(
-                SemanticPolygonVoidGeometry(
+                _polygon_void_geometry(
                     raw_points=void_raw_points,
                     arcs=void_arcs,
                     polarity="VOID",
@@ -1009,7 +1397,7 @@ def _semantic_primitives(
 
         first_index = group.get("first_index")
         primitives.append(
-            SemanticPrimitive(
+            SemanticPrimitive.model_construct(
                 id=semantic_id("primitive", f"shape:{group_id}"),
                 kind="polygon",
                 layer_name=group.get("layer_name")
@@ -1020,7 +1408,7 @@ def _semantic_primitives(
                     if isinstance(group.get("net_name"), str)
                     else ""
                 ),
-                geometry=SemanticPrimitiveGeometry(
+                geometry=_primitive_geometry(
                     record_kind="SHAPE",
                     feature_id=group_id,
                     raw_points=raw_points,
@@ -1062,49 +1450,101 @@ def _track_group_id(record_tag: str | None) -> str | None:
     return parts[0] if parts else None
 
 
-def _track_region_id(record_tag: str | None) -> str | None:
-    parts = _record_tag_parts(record_tag)
-    if len(parts) < 3:
-        return None
-    return parts[-1]
-
-
 def _record_tag_parts(record_tag: str | None) -> list[str]:
     return (record_tag or "").split()
 
 
+def _track_group_id_fast(record_tag: str | None) -> str | None:
+    if not record_tag:
+        return None
+    return record_tag.split(maxsplit=1)[0]
+
+
+def _track_group_region_id(record_tag: str | None) -> tuple[str | None, str | None]:
+    parts = _record_tag_parts(record_tag)
+    if len(parts) < 3:
+        return (parts[0], None) if parts else (None, None)
+    return parts[0], parts[-1]
+
+
 def _polygon_track_geometry(
     segments: Iterable[tuple[int, ALGTrack]],
-) -> tuple[list[SemanticArcGeometry], list[list[float | int | None]]]:
-    arcs: list[SemanticArcGeometry] = []
+) -> tuple[list[dict[str, object]], list[list[float | int | None]]]:
+    arcs: list[dict[str, object]] = []
     raw_points: list[list[float | int | None]] = []
+    first_start: list[float | int | None] | None = None
     for _index, track in segments:
-        geometry = _track_arc_geometry(track)
-        if geometry is None:
+        if track.start is None or track.end is None:
             continue
-        arcs.append(geometry)
-        if track.end is not None:
-            raw_points.append([track.end.x, track.end.y])
-    if arcs and arcs[0].start is not None:
-        raw_points.insert(0, list(arcs[0].start))
+        start = [track.start.x, track.start.y]
+        end = [track.end.x, track.end.y]
+        if first_start is None:
+            first_start = start
+        if track.kind == "line":
+            arcs.append({"start": start, "end": end, "is_segment": True})
+            raw_points.append(end)
+            continue
+        if track.kind != "arc" or track.center is None:
+            continue
+        arcs.append(
+            {
+                "start": start,
+                "end": end,
+                "center": [track.center.x, track.center.y],
+                "clockwise": track.clockwise,
+                "is_ccw": False if track.clockwise else True,
+            }
+        )
+        raw_points.append(end)
+    if first_start is not None:
+        raw_points.insert(0, first_start)
     return arcs, raw_points
 
 
-def _track_arc_geometry(track: ALGTrack) -> SemanticArcGeometry | None:
-    if track.start is None or track.end is None:
-        return None
-    start = [track.start.x, track.start.y]
-    end = [track.end.x, track.end.y]
-    if track.kind == "line":
-        return SemanticArcGeometry(start=start, end=end, is_segment=True)
-    if track.kind != "arc" or track.center is None:
-        return None
-    return SemanticArcGeometry(
-        start=start,
-        end=end,
-        center=[track.center.x, track.center.y],
-        clockwise=track.clockwise,
-        is_ccw=False if track.clockwise else True,
+def _polygon_void_geometry(**fields) -> dict[str, object]:
+    return fields
+
+
+def _primitive_geometry(**fields) -> SemanticPrimitiveGeometry:
+    field_names = set(fields)
+    values = {
+        "record_kind": None,
+        "feature_index": None,
+        "feature_id": None,
+        "line_number": None,
+        "tokens": [],
+        "polarity": None,
+        "symbol": None,
+        "shape_id": None,
+        "dcode": None,
+        "orientation": None,
+        "rotation": None,
+        "mirror_x": None,
+        "mirror_y": None,
+        "start": None,
+        "end": None,
+        "center": None,
+        "location": None,
+        "width": None,
+        "center_line": [],
+        "raw_points": [],
+        "arcs": [],
+        "voids": [],
+        "has_voids": None,
+        "void_ids": [],
+        "surface_group_index": None,
+        "surface_group_count": None,
+        "is_negative": None,
+        "is_void": None,
+        "bbox": None,
+        "area": None,
+        "clockwise": None,
+        "is_ccw": None,
+    }
+    values.update(fields)
+    return SemanticPrimitiveGeometry.model_construct(
+        _fields_set=field_names,
+        **values,
     )
 
 
@@ -1144,6 +1584,21 @@ def _shape_id_for_alg_shape(
             source_path=source_path,
             source_key=source_key,
         )
+    if kind in {"OBLONG_X", "OBLONG_Y", "OVAL", "FIG_OBLONG"}:
+        radius = min(width, height) / 2.0
+        return _shape_id(
+            shapes,
+            shape_ids_by_key,
+            kind="rounded_rectangle",
+            auroradb_type="RoundedRectangle",
+            values=[0.0, 0.0, width, height, radius],
+            source_path=source_path,
+            source_key=source_key,
+        )
+    if kind in {"SQUARE", "FIG_SQUARE"}:
+        side = max(width, height)
+        width = side
+        height = side
     return _shape_id(
         shapes,
         shape_ids_by_key,

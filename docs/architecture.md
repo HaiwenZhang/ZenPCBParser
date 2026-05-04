@@ -333,7 +333,7 @@ JSON payload 中统一输出：
 | ALG JSON schema | `0.2.0` |
 | Altium parser | `0.1.0` |
 | Altium JSON schema | `0.1.0` |
-| Semantic parser | `0.7.10` |
+| Semantic parser | `0.7.12` |
 | Semantic JSON schema | `0.7.2` |
 
 ## 开发和构建
@@ -725,7 +725,7 @@ Current versions:
 | ALG JSON schema | `0.2.0` |
 | Altium parser | `0.1.0` |
 | Altium JSON schema | `0.1.0` |
-| Semantic parser | `0.7.10` |
+| Semantic parser | `0.7.12` |
 | Semantic JSON schema | `0.7.2` |
 
 ## Development And Build

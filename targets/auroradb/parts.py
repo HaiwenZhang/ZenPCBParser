@@ -920,6 +920,9 @@ def _component_footprint_pad_score(
     geometry = pad.geometry
     if geometry.get("source") != "package":
         score += 1000
+    if component.layer_name and pad.layer_name:
+        if component.layer_name.casefold() == pad.layer_name.casefold():
+            score += 200
     side = layer_sides.get((pad.layer_name or "").casefold())
     if component.side and side == component.side:
         score += 100

@@ -24,8 +24,8 @@ def build_connectivity_edges(board: SemanticBoard) -> list[ConnectivityEdge]:
             return
         seen.add(key)
         edges.append(
-            ConnectivityEdge(
-                kind=kind,  # type: ignore[arg-type]
+            ConnectivityEdge.model_construct(
+                kind=kind,
                 source_id=source_id,
                 target_id=target_id,
             )
