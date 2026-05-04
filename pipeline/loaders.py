@@ -26,6 +26,7 @@ def load_source_payload(
         source_format=source_format,
         source=resolved_source,
         include_details=load_options.include_details,
+        aedb_backend=load_options.aedb_backend if source_format == "aedb" else None,
         aedt_version=load_options.aedt_version,
         component_center_source=load_options.component_center_source,
         aedb_parse_profile=load_options.aedb_parse_profile
@@ -36,6 +37,21 @@ def load_source_payload(
     )
 
     if source_format == "aedb":
+        if load_options.aedb_backend == "def-binary":
+            from aurora_translator.sources.aedb import parse_aedb_def_binary
+
+            with log_timing(
+                logger,
+                "load AEDB DEF binary source payload",
+                banner=True,
+                source=resolved_source,
+            ):
+                return parse_aedb_def_binary(
+                    resolved_source,
+                    include_details=load_options.include_details,
+                    rust_binary=load_options.rust_binary,
+                )
+
         from aurora_translator.sources.aedb import parse_aedb
 
         with log_timing(

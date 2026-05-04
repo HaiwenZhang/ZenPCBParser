@@ -2,9 +2,13 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
+import io
 from math import cos, degrees, radians, sin
+from pathlib import Path
 import re
 from typing import Iterable
+import xml.etree.ElementTree as ET
+import zipfile
 
 from aurora_translator.semantic.adapters.utils import (
     role_from_net_name,
@@ -19,6 +23,7 @@ from aurora_translator.semantic.models import (
     SemanticFootprint,
     SemanticArcGeometry,
     SemanticLayer,
+    SemanticMaterial,
     SemanticMetadata,
     SemanticNet,
     SemanticPad,
@@ -78,11 +83,14 @@ _CIRCLE_PADSTACK_NAME_RE = re.compile(r"^C(?P<diameter>[0-9D]+)(?:_|$)", re.IGNO
 REF_DES_CLASS_CODE = 0x0D
 REF_DES_BOTTOM_SUBCLASS_CODE = 0xFC
 REF_DES_TOP_SUBCLASS_CODE = 0xFD
+ALLEGRO_NO_NET_NAME = "NONET"
 
 
 @dataclass(slots=True)
 class _PadRecord:
     pad: BRDPlacedPad
+    pin_id: str
+    pad_id: str
     component_id: str
     footprint_id: str | None
     footprint_name: str
@@ -94,6 +102,7 @@ class _PadRecord:
     padstack_definition: str | None
     center: SemanticPoint
     layer_name: str | None
+    component_layer_name: str | None
     side: str | None
     component_location: SemanticPoint | None
     component_rotation: float | None
@@ -114,10 +123,23 @@ class _ComponentInfo:
     rotation: float | None
 
 
+@dataclass(slots=True)
+class _BRDStackupLayer:
+    index: int
+    name: str
+    conductor: bool
+    layer_type: str | None
+    material: str | None
+    thickness: str | None
+    conductivity: str | None
+    permittivity: str | None
+    loss_tangent: str | None
+
+
 def from_brd(payload: BRDLayout, *, build_connectivity: bool = True) -> SemanticBoard:
     diagnostics = _source_diagnostics(payload)
-    layers = _semantic_layers(payload)
-    layer_names = [layer.name for layer in layers]
+    layers, materials = _semantic_stackup(payload)
+    layer_names = [layer.name for layer in layers if _is_metal_layer(layer)]
     top_layer = _top_layer_name(layers)
     bottom_layer = _bottom_layer_name(layers)
 
@@ -151,6 +173,7 @@ def from_brd(payload: BRDLayout, *, build_connectivity: bool = True) -> Semantic
     }
     pad_records = _placed_pad_records(
         payload,
+        layer_names,
         top_layer,
         net_ids_by_assignment,
         instance_footprint_names,
@@ -184,6 +207,7 @@ def from_brd(payload: BRDLayout, *, build_connectivity: bool = True) -> Semantic
         units=_semantic_units(payload),
         summary=SemanticSummary(),
         layers=layers,
+        materials=materials,
         shapes=shapes,
         via_templates=via_templates,
         nets=nets,
@@ -214,6 +238,15 @@ def _source_diagnostics(payload: BRDLayout) -> list[SemanticDiagnostic]:
     ]
 
 
+def _semantic_stackup(payload: BRDLayout) -> tuple[list[SemanticLayer], list[SemanticMaterial]]:
+    brd_layers = _semantic_layers(payload)
+    brd_metal_names = [layer.name for layer in brd_layers if _is_metal_layer(layer)]
+    embedded_stackup = _embedded_brd_stackup(payload, brd_metal_names)
+    if embedded_stackup is not None:
+        return embedded_stackup
+    return _semantic_stackup_with_placeholder_dielectrics(brd_layers), []
+
+
 def _semantic_layers(payload: BRDLayout) -> list[SemanticLayer]:
     string_by_id = {entry.id: entry.value for entry in payload.strings or []}
     candidate_layers = _physical_etch_layer_lists(payload, string_by_id)
@@ -242,6 +275,340 @@ def _semantic_layers(payload: BRDLayout) -> list[SemanticLayer]:
     return layers
 
 
+def _is_metal_layer(layer: SemanticLayer) -> bool:
+    return (layer.role or "").casefold() in {"signal", "plane"}
+
+
+def _semantic_stackup_with_placeholder_dielectrics(
+    layers: list[SemanticLayer],
+) -> list[SemanticLayer]:
+    metal_layers = [layer for layer in layers if _is_metal_layer(layer)]
+    if len(metal_layers) <= 1:
+        return layers
+
+    stackup_layers: list[SemanticLayer] = []
+    dielectric_index = 0
+    for metal_index, layer in enumerate(metal_layers):
+        stackup_layers.append(
+            layer.model_copy(update={"order_index": len(stackup_layers)})
+        )
+        if metal_index == len(metal_layers) - 1:
+            continue
+        name = f"D{dielectric_index}"
+        stackup_layers.append(
+            SemanticLayer(
+                id=semantic_id("layer", name, f"brd_dielectric_{dielectric_index}"),
+                name=name,
+                layer_type="DIELECTRIC",
+                role="dielectric",
+                side=None,
+                order_index=len(stackup_layers),
+                material=None,
+                source=source_ref(
+                    "brd",
+                    f"implicit_dielectric_stackup[{dielectric_index}]",
+                    name,
+                ),
+            )
+        )
+        dielectric_index += 1
+    return stackup_layers
+
+
+def _embedded_brd_stackup(
+    payload: BRDLayout, brd_metal_names: list[str]
+) -> tuple[list[SemanticLayer], list[SemanticMaterial]] | None:
+    stackup_layers = _read_embedded_brd_stackup_layers(payload, brd_metal_names)
+    if not stackup_layers:
+        return None
+    materials, material_ids_by_key = _semantic_materials_from_brd_stackup(stackup_layers)
+    return (
+        _semantic_layers_from_brd_stackup(stackup_layers, material_ids_by_key),
+        materials,
+    )
+
+
+def _read_embedded_brd_stackup_layers(
+    payload: BRDLayout, brd_metal_names: list[str]
+) -> list[_BRDStackupLayer]:
+    source = getattr(payload.metadata, "source", None)
+    if not source or not brd_metal_names:
+        return []
+    source_path = Path(source)
+    if not source_path.exists() or not source_path.is_file():
+        return []
+
+    try:
+        data = source_path.read_bytes()
+    except OSError:
+        return []
+
+    for block in payload.blocks or []:
+        if block.block_type != 0x3B:
+            continue
+        if block.offset < 0 or block.length <= 0:
+            continue
+        raw = data[block.offset : block.offset + block.length]
+        layers = _stackup_layers_from_property_block(raw, brd_metal_names)
+        if layers:
+            return layers
+    return []
+
+
+def _stackup_layers_from_property_block(
+    raw: bytes, brd_metal_names: list[str]
+) -> list[_BRDStackupLayer]:
+    if len(raw) < 180 or raw[0] != 0x3B:
+        return []
+    property_name = raw[8:136].split(b"\0", 1)[0].decode("utf-8", errors="replace")
+    if property_name != "DBPartitionAttachment":
+        return []
+    zip_offset = raw.find(b"PK\x03\x04", 160)
+    if zip_offset < 0:
+        return []
+    try:
+        with zipfile.ZipFile(io.BytesIO(raw[zip_offset:])) as archive:
+            xml_bytes = archive.read("objects/Design.xml")
+            unit = _stackup_unit_from_archive(archive)
+    except (KeyError, OSError, zipfile.BadZipFile):
+        return []
+    return _stackup_layers_from_design_xml(xml_bytes, brd_metal_names, unit)
+
+
+def _stackup_unit_from_archive(archive: zipfile.ZipFile) -> str:
+    try:
+        root = ET.fromstring(archive.read("Header.xml"))
+    except (KeyError, ET.ParseError):
+        return "mm"
+    precision = root.find(".//precision")
+    unit = precision.attrib.get("units") if precision is not None else None
+    return unit or "mm"
+
+
+def _stackup_layers_from_design_xml(
+    xml_bytes: bytes, brd_metal_names: list[str], unit: str
+) -> list[_BRDStackupLayer]:
+    try:
+        root = ET.fromstring(xml_bytes)
+    except ET.ParseError:
+        return []
+    for cross_section in root.findall(".//xs/c"):
+        layers: list[_BRDStackupLayer] = []
+        dielectric_index = 0
+        for raw_layer in cross_section.findall("o"):
+            stackup_layer = _brd_stackup_layer_from_xml_object(
+                len(layers),
+                raw_layer,
+                dielectric_index,
+                unit,
+            )
+            if stackup_layer is None:
+                continue
+            if not stackup_layer.conductor:
+                dielectric_index += 1
+            layers.append(stackup_layer)
+        metal_names = [layer.name for layer in layers if layer.conductor]
+        if metal_names == brd_metal_names:
+            return layers
+    return []
+
+
+def _brd_stackup_layer_from_xml_object(
+    index: int, element: ET.Element, dielectric_index: int, unit: str
+) -> _BRDStackupLayer | None:
+    attributes = _xml_layer_attributes(element)
+    function = attributes.get("CDS_LAYER_FUNCTION")
+    function_text = (function or "").casefold()
+    if function_text in {"surface", "solder_mask"}:
+        return None
+    conductor = function_text == "conductor"
+    if not conductor and not function_text.startswith("dielectric"):
+        return None
+    name = attributes.get("CDS_LAYER_NAME") or ""
+    if not conductor:
+        name = name or f"D{dielectric_index}"
+    thickness = _length_text(attributes.get("CDS_LAYER_THICKNESS"), unit)
+    conductivity = attributes.get("CDS_LAYER_ELECTRICAL_CONDUCTIVITY")
+    if conductivity and "mho/cm" not in conductivity.casefold():
+        conductivity = f"{conductivity} mho/cm"
+    return _BRDStackupLayer(
+        index=index,
+        name=name,
+        conductor=conductor,
+        layer_type=function,
+        material=attributes.get("CDS_LAYER_MATERIAL"),
+        thickness=thickness,
+        conductivity=conductivity,
+        permittivity=attributes.get("CDS_LAYER_DIELECTRIC_CONSTANT"),
+        loss_tangent=attributes.get("CDS_LAYER_LOSS_TANGENT"),
+    )
+
+
+def _xml_layer_attributes(element: ET.Element) -> dict[str, str]:
+    attributes: dict[str, str] = {}
+    for attribute in element.findall("a"):
+        name = attribute.attrib.get("N")
+        value_node = attribute.find("v")
+        value = value_node.attrib.get("V") if value_node is not None else None
+        if name and value is not None:
+            attributes[name] = value
+    return attributes
+
+
+def _length_text(value: str | None, unit: str) -> str | None:
+    if value is None:
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    if re.search(r"[A-Za-zμµ]", text):
+        return text
+    return f"{text} {unit}"
+
+
+def _semantic_materials_from_brd_stackup(
+    layers: list[_BRDStackupLayer],
+) -> tuple[list[SemanticMaterial], dict[tuple[str, str, str], str]]:
+    materials: list[SemanticMaterial] = []
+    material_ids_by_key: dict[tuple[str, str, str], str] = {}
+    metal_index = 1
+    dielectric_index = 0
+    for layer in layers:
+        if layer.conductor:
+            conductivity = _conductivity_to_si(layer.conductivity)
+            key = ("metal", _material_key_value(conductivity), "")
+            if key in material_ids_by_key:
+                continue
+            material_name = f"Metal{metal_index}"
+            metal_index += 1
+            material_id = semantic_id("material", material_name)
+            material_ids_by_key[key] = material_id
+            materials.append(
+                SemanticMaterial(
+                    id=material_id,
+                    name=material_name,
+                    role="metal",
+                    conductivity=conductivity,
+                    source=source_ref(
+                        "brd",
+                        f"embedded_stackup.layers[{layer.index}].material",
+                        layer.material,
+                    ),
+                )
+            )
+            continue
+
+        permittivity = _number_text(layer.permittivity)
+        loss_tangent = _number_text(layer.loss_tangent)
+        key = (
+            "dielectric",
+            _material_key_value(permittivity),
+            _material_key_value(loss_tangent),
+        )
+        if key in material_ids_by_key:
+            continue
+        material_name = f"Dielectric{dielectric_index}"
+        dielectric_index += 1
+        material_id = semantic_id("material", material_name)
+        material_ids_by_key[key] = material_id
+        materials.append(
+            SemanticMaterial(
+                id=material_id,
+                name=material_name,
+                role="dielectric",
+                permittivity=permittivity,
+                dielectric_loss_tangent=loss_tangent,
+                source=source_ref(
+                    "brd",
+                    f"embedded_stackup.layers[{layer.index}].material",
+                    layer.material,
+                ),
+            )
+        )
+    return materials, material_ids_by_key
+
+
+def _semantic_layers_from_brd_stackup(
+    stackup_layers: list[_BRDStackupLayer],
+    material_ids_by_key: dict[tuple[str, str, str], str],
+) -> list[SemanticLayer]:
+    layers: list[SemanticLayer] = []
+    conductor_layers = [layer for layer in stackup_layers if layer.conductor]
+    conductor_count = len(conductor_layers)
+    conductor_index = 0
+    dielectric_index = 0
+    for layer in stackup_layers:
+        if layer.conductor:
+            if not layer.name:
+                continue
+            name = layer.name
+            role = _layer_role(layer.layer_type)
+            side = _layer_side(ETCH_CLASS_CODE, conductor_index, conductor_count, name)
+            material_key = (
+                "metal",
+                _material_key_value(_conductivity_to_si(layer.conductivity)),
+                "",
+            )
+            conductor_index += 1
+        else:
+            name = layer.name or f"D{dielectric_index}"
+            role = "dielectric"
+            side = None
+            material_key = (
+                "dielectric",
+                _material_key_value(_number_text(layer.permittivity)),
+                _material_key_value(_number_text(layer.loss_tangent)),
+            )
+            dielectric_index += 1
+        layers.append(
+            SemanticLayer(
+                id=semantic_id("layer", name, layer.index),
+                name=name,
+                layer_type=layer.layer_type,
+                role=role,
+                side=side,
+                order_index=len(layers),
+                material=layer.material,
+                material_id=material_ids_by_key.get(material_key),
+                thickness=layer.thickness,
+                source=source_ref("brd", f"embedded_stackup.layers[{layer.index}]", name),
+            )
+        )
+    return layers
+
+
+def _layer_role(layer_type: str | None) -> str:
+    layer_type_text = (layer_type or "").casefold()
+    if "plane" in layer_type_text:
+        return "plane"
+    return "signal"
+
+
+def _number_text(value: str | None) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value.split()[0])
+    except (ValueError, IndexError):
+        return None
+
+
+def _material_key_value(value: float | None) -> str:
+    if value is None:
+        return ""
+    return f"{value:.12g}"
+
+
+def _conductivity_to_si(value: str | None) -> float | None:
+    number = _number_text(value)
+    if number is None:
+        return None
+    text = (value or "").casefold()
+    if "mho/cm" in text or "s/cm" in text:
+        return number * 100.0
+    return number
+
+
 def _physical_etch_layer_lists(
     payload: BRDLayout, string_by_id: dict[int, str]
 ) -> list[tuple[int, BRDLayer, list[str]]]:
@@ -258,10 +625,18 @@ def _physical_etch_layer_lists(
         resolved.append((index, layer_list, names))
 
     stackup_like = [
-        item for item in resolved if len(item[2]) > 1 and _has_top_bottom_names(item[2])
+        item for item in resolved if _physical_stackup_layer_list_score(item[2]) > 0
     ]
     if stackup_like:
-        return [max(stackup_like, key=lambda item: len(item[2]))]
+        return [
+            max(
+                stackup_like,
+                key=lambda item: (
+                    _physical_stackup_layer_list_score(item[2]),
+                    len(item[2]),
+                ),
+            )
+        ]
 
     multi_layer = [item for item in resolved if len(item[2]) > 1]
     if multi_layer:
@@ -272,6 +647,35 @@ def _physical_etch_layer_lists(
         for item in resolved
         if not any(_non_stackup_etch_name(name) for name in item[2])
     ]
+
+
+def _physical_stackup_layer_list_score(names: list[str]) -> int:
+    if len(names) <= 1:
+        return 0
+    first = _stackup_endpoint_kind(names[0])
+    last = _stackup_endpoint_kind(names[-1])
+    if first == "top" and last == "bottom":
+        return 100
+    if first == "top" or last == "bottom":
+        return 10
+    return 0
+
+
+def _stackup_endpoint_kind(name: str) -> str | None:
+    token = re.sub(r"[^a-z0-9]+", "_", name.casefold()).strip("_")
+    if token in {"top", "top_layer", "top_cu", "f_cu", "front"}:
+        return "top"
+    if token in {
+        "bottom",
+        "bottom_layer",
+        "bottom_cu",
+        "bot",
+        "bot_layer",
+        "b_cu",
+        "back",
+    }:
+        return "bottom"
+    return None
 
 
 def _has_top_bottom_names(names: Iterable[str]) -> bool:
@@ -336,33 +740,54 @@ def _bottom_layer_name(layers: list[SemanticLayer]) -> str | None:
 def _semantic_nets(payload: BRDLayout) -> tuple[list[SemanticNet], dict[int, str]]:
     nets: list[SemanticNet] = []
     net_ids_by_assignment: dict[int, str] = {}
+    no_net_id = _no_net_id(payload)
+    no_net_added = False
     for index, net in enumerate(payload.nets or []):
-        net_id = semantic_id("net", net.name or net.key, index)
+        if not net.name:
+            net_ids_by_assignment[net.assignment] = no_net_id
+            net_ids_by_assignment[net.key] = no_net_id
+            continue
+        if _is_allegro_no_net_name(net.name):
+            net_id = no_net_id
+            net_name = ALLEGRO_NO_NET_NAME
+            net_role = "no_net"
+            if no_net_added:
+                net_ids_by_assignment[net.assignment] = net_id
+                net_ids_by_assignment[net.key] = net_id
+                continue
+            no_net_added = True
+        else:
+            net_id = semantic_id("net", net.name, index)
+            net_name = net.name
+            net_role = role_from_net_name(net.name)
         nets.append(
             SemanticNet(
                 id=net_id,
-                name=net.name or f"Net_{net.key}",
-                role=role_from_net_name(net.name),
+                name=net_name,
+                role=net_role,
                 source=source_ref("brd", f"nets[{index}]", net.key),
             )
         )
         net_ids_by_assignment[net.assignment] = net_id
         net_ids_by_assignment[net.key] = net_id
-    if not any((net.name or "").casefold() == "nonet" for net in nets):
-        no_net_id = _no_net_id(payload)
+    if not no_net_added:
         nets.append(
             SemanticNet(
                 id=no_net_id,
-                name="NoNet",
-                role="unknown",
-                source=source_ref("brd", "implicit_no_net", "NoNet"),
+                name=ALLEGRO_NO_NET_NAME,
+                role="no_net",
+                source=source_ref("brd", "implicit_no_net", ALLEGRO_NO_NET_NAME),
             )
         )
     return nets, net_ids_by_assignment
 
 
 def _no_net_id(payload: BRDLayout) -> str:
-    return semantic_id("net", "NoNet", len(payload.nets or []))
+    return semantic_id("net", ALLEGRO_NO_NET_NAME, len(payload.nets or []))
+
+
+def _is_allegro_no_net_name(name: str | None) -> bool:
+    return (name or "").casefold() in {"nonet", "no_net", "no net"}
 
 
 def _semantic_via_templates(
@@ -1058,6 +1483,7 @@ def _placed_pad_shape_id(
     shapes: list[SemanticShape],
     shape_ids_by_key: dict[tuple[str, tuple[object, ...]], str],
     footprint_rotation_degrees: float | None = None,
+    layer_index: int = 0,
 ) -> str:
     if padstack is not None:
         pob = _pob_dimensions(padstack.name)
@@ -1104,7 +1530,7 @@ def _placed_pad_shape_id(
                 source_path="padstacks.name",
                 source_key=padstack.key,
             )
-        component = _padstack_layer_component(padstack, 0, "pad")
+        component = _padstack_layer_component(padstack, layer_index, "pad")
         shape_id = _padstack_component_shape_id(
             payload,
             component,
@@ -1143,6 +1569,7 @@ def _placed_pad_shape_id(
 
 def _placed_pad_records(
     payload: BRDLayout,
+    layer_names: list[str],
     top_layer: str | None,
     net_ids_by_assignment: dict[int, str],
     instance_footprint_names: dict[int, str],
@@ -1183,20 +1610,6 @@ def _placed_pad_records(
             placed_pad.parent_footprint, f"BRD_FOOTPRINT_{placed_pad.parent_footprint}"
         )
         component_info = component_infos.get(placed_pad.parent_footprint)
-        shape_id = _placed_pad_shape_id(
-            payload,
-            pad_definition,
-            padstack,
-            width=width,
-            height=height,
-            placed_pad_index=index,
-            placed_pad_key=placed_pad.key,
-            footprint_rotation_degrees=(
-                _degrees(component_info.rotation) if component_info else None
-            ),
-            shapes=shapes,
-            shape_ids_by_key=shape_ids_by_key,
-        )
         component_key = (
             component_info.key if component_info else placed_pad.parent_footprint
         )
@@ -1229,31 +1642,96 @@ def _placed_pad_records(
         ) + footprint_pad_rotation
         via_rotation = _pad_rotation_for_shape(pad_definition, padstack_definition)
         footprint_id = semantic_id("footprint", footprint_name)
-        records.append(
-            _PadRecord(
-                pad=placed_pad,
-                component_id=semantic_id("component", component_key),
-                footprint_id=footprint_id,
-                footprint_name=footprint_name,
-                part_name=part_name,
-                refdes=refdes,
-                net_id=net_ids_by_assignment.get(placed_pad.net_assignment),
-                shape_id=shape_id,
-                pin_name=actual_pin_name,
-                padstack_definition=padstack_definition,
-                center=center,
-                layer_name=(component_info.layer_name if component_info else None)
-                or top_layer,
-                side=(component_info.side if component_info else None) or "top",
-                component_location=component_info.location if component_info else None,
-                component_rotation=component_info.rotation if component_info else None,
-                pad_rotation=pad_rotation,
-                footprint_pad_rotation=footprint_pad_rotation,
-                via_rotation=via_rotation,
-                via_position=via_position,
-            )
+        component_layer_name = (
+            component_info.layer_name if component_info else None
+        ) or top_layer
+        layer_records = _placed_pad_layer_records(
+            padstack,
+            layer_names,
+            component_layer_name,
         )
+        pin_id = semantic_id(
+            "pin",
+            f"{placed_pad.parent_footprint}:{actual_pin_name}:{placed_pad.key}",
+        )
+        for layer_name, layer_index, is_multilayer in layer_records:
+            shape_id = _placed_pad_shape_id(
+                payload,
+                pad_definition,
+                padstack,
+                width=width,
+                height=height,
+                placed_pad_index=index,
+                placed_pad_key=placed_pad.key,
+                footprint_rotation_degrees=(
+                    _degrees(component_info.rotation) if component_info else None
+                ),
+                layer_index=layer_index,
+                shapes=shapes,
+                shape_ids_by_key=shape_ids_by_key,
+            )
+            pad_id = semantic_id(
+                "pad",
+                f"{placed_pad.key}:{layer_name}" if is_multilayer else placed_pad.key,
+            )
+            records.append(
+                _PadRecord(
+                    pad=placed_pad,
+                    pin_id=pin_id,
+                    pad_id=pad_id,
+                    component_id=semantic_id("component", component_key),
+                    footprint_id=footprint_id,
+                    footprint_name=footprint_name,
+                    part_name=part_name,
+                    refdes=refdes,
+                    net_id=net_ids_by_assignment.get(placed_pad.net_assignment),
+                    shape_id=shape_id,
+                    pin_name=actual_pin_name,
+                    padstack_definition=padstack_definition,
+                    center=center,
+                    layer_name=layer_name,
+                    component_layer_name=component_layer_name,
+                    side=(component_info.side if component_info else None) or "top",
+                    component_location=component_info.location if component_info else None,
+                    component_rotation=component_info.rotation if component_info else None,
+                    pad_rotation=pad_rotation,
+                    footprint_pad_rotation=footprint_pad_rotation,
+                    via_rotation=via_rotation,
+                    via_position=via_position,
+                )
+            )
     return records
+
+
+def _placed_pad_layer_records(
+    padstack: BRDPadstack | None,
+    layer_names: list[str],
+    fallback_layer_name: str | None,
+) -> list[tuple[str | None, int, bool]]:
+    if (
+        padstack is not None
+        and layer_names
+        and int(padstack.layer_count or 0) > 1
+        and _padstack_has_layer_pad_components(padstack)
+    ):
+        result: list[tuple[str | None, int, bool]] = []
+        for layer_index in _padstack_layer_indices(padstack, layer_names):
+            component = _padstack_layer_component(padstack, layer_index, "pad")
+            if component is None or component.component_type == 0:
+                continue
+            result.append((layer_names[layer_index], layer_index, True))
+        if result:
+            return result
+    return [(fallback_layer_name, 0, False)]
+
+
+def _padstack_has_layer_pad_components(padstack: BRDPadstack) -> bool:
+    return any(
+        component.role == "pad"
+        and component.layer_index is not None
+        and component.component_type != 0
+        for component in padstack.components or []
+    )
 
 
 def _pad_rotation_for_shape(
@@ -1321,24 +1799,18 @@ def _pin_name(
 def _semantic_footprints(
     payload: BRDLayout, pad_records: list[_PadRecord]
 ) -> list[SemanticFootprint]:
+    _ = payload
     names = {
         record.footprint_name: record.footprint_id
         for record in pad_records
         if record.footprint_id
     }
-    for footprint in payload.footprints or []:
-        if not footprint.name:
-            continue
-        names.setdefault(footprint.name, semantic_id("footprint", footprint.name))
 
     footprints: list[SemanticFootprint] = []
     pad_ids_by_footprint: dict[str, list[str]] = defaultdict(list)
     for record in pad_records:
         if record.footprint_id:
-            unique_append(
-                pad_ids_by_footprint[record.footprint_id],
-                semantic_id("pad", record.pad.key),
-            )
+            unique_append(pad_ids_by_footprint[record.footprint_id], record.pad_id)
 
     for index, (name, footprint_id) in enumerate(sorted(names.items())):
         footprints.append(
@@ -1373,33 +1845,18 @@ def _component_pin_pad_records(
         footprint_name = first_record.footprint_name
         footprint_id = first_record.footprint_id
 
+        records_by_pin: dict[str, list[_PadRecord]] = defaultdict(list)
         for record in records:
-            pin_id = semantic_id(
-                "pin",
-                f"{record.pad.parent_footprint}:{record.pin_name}:{record.pad.key}",
-            )
-            pad_id = semantic_id("pad", record.pad.key)
-            unique_append(pin_ids, pin_id)
-            unique_append(pad_ids, pad_id)
-            pins.append(
-                SemanticPin(
-                    id=pin_id,
-                    name=record.pin_name,
-                    component_id=component_id,
-                    net_id=record.net_id,
-                    pad_ids=[pad_id],
-                    layer_name=record.layer_name or top_layer,
-                    position=record.center,
-                    source=source_ref("brd", "placed_pads.pin_number", record.pad.key),
-                )
-            )
+            unique_append(pin_ids, record.pin_id)
+            unique_append(pad_ids, record.pad_id)
+            records_by_pin[record.pin_id].append(record)
             pads.append(
                 SemanticPad(
-                    id=pad_id,
+                    id=record.pad_id,
                     name=record.pin_name,
                     footprint_id=footprint_id,
                     component_id=component_id,
-                    pin_id=pin_id,
+                    pin_id=record.pin_id,
                     net_id=record.net_id,
                     layer_name=record.layer_name or top_layer,
                     position=record.center,
@@ -1420,6 +1877,24 @@ def _component_pin_pad_records(
                     source=source_ref("brd", "placed_pads", record.pad.key),
                 )
             )
+        for pin_id, pin_records in records_by_pin.items():
+            first_pin_record = pin_records[0]
+            pins.append(
+                SemanticPin(
+                    id=pin_id,
+                    name=first_pin_record.pin_name,
+                    component_id=component_id,
+                    net_id=first_pin_record.net_id,
+                    pad_ids=[record.pad_id for record in pin_records],
+                    layer_name=first_pin_record.component_layer_name
+                    or first_pin_record.layer_name
+                    or top_layer,
+                    position=first_pin_record.center,
+                    source=source_ref(
+                        "brd", "placed_pads.pin_number", first_pin_record.pad.key
+                    ),
+                )
+            )
 
         components.append(
             SemanticComponent(
@@ -1429,7 +1904,9 @@ def _component_pin_pad_records(
                 part_name=first_record.part_name or footprint_name,
                 package_name=footprint_name,
                 footprint_id=footprint_id,
-                layer_name=first_record.layer_name or top_layer,
+                layer_name=first_record.component_layer_name
+                or first_record.layer_name
+                or top_layer,
                 side=first_record.side or "top",
                 location=component_center,
                 rotation=first_record.component_rotation or 0,
@@ -1983,6 +2460,13 @@ def _component_infos(
     part_names_by_instance = _part_names_by_component_instance(
         payload.components or [], component_instances_by_key
     )
+    string_by_id = {entry.id: entry.value for entry in payload.strings or []}
+    refdes_inner_layer_map = _refdes_inner_layer_map(payload, layer_names, string_by_id)
+    block_next_by_key = {
+        block.key: block.next
+        for block in payload.blocks or []
+        if block.key is not None and block.next is not None
+    }
 
     result: dict[int, _ComponentInfo] = {}
     for footprint_instance in payload.footprint_instances or []:
@@ -1997,16 +2481,17 @@ def _component_infos(
             if component_instance and component_instance.refdes
             else f"BRD_{footprint_instance.key}"
         )
-        text_layer = (
-            texts_by_key.get(footprint_instance.text).layer
-            if texts_by_key.get(footprint_instance.text) is not None
-            else None
+        text_layer = _component_text_layer(
+            footprint_instance.text,
+            texts_by_key,
+            block_next_by_key,
         )
         layer_name = _component_layer_from_refdes_text(
             text_layer,
             layer_names,
             top_layer,
             bottom_layer,
+            refdes_inner_layer_map,
         )
         if layer_name is None:
             side = "bottom" if footprint_instance.layer != 0 else "top"
@@ -2030,6 +2515,7 @@ def _component_layer_from_refdes_text(
     layer_names: list[str],
     top_layer: str | None,
     bottom_layer: str | None,
+    refdes_inner_layer_map: dict[int, str] | None = None,
 ) -> str | None:
     if layer is None or getattr(layer, "class_code", None) != REF_DES_CLASS_CODE:
         return None
@@ -2040,12 +2526,103 @@ def _component_layer_from_refdes_text(
         return bottom_layer
     if not isinstance(subclass_code, int):
         return None
+    if refdes_inner_layer_map:
+        layer_name = refdes_inner_layer_map.get(subclass_code)
+        if layer_name:
+            return layer_name
     if subclass_code % 2 != 0:
         return None
     layer_index = subclass_code // 2 + 1
     if 0 < layer_index < len(layer_names):
         return layer_names[layer_index]
     return None
+
+
+def _component_text_layer(
+    text_key: int,
+    texts_by_key: dict[int, BRDText],
+    block_next_by_key: dict[int, int],
+) -> object | None:
+    current = text_key
+    seen: set[int] = set()
+    while current and current not in seen:
+        seen.add(current)
+        text = texts_by_key.get(current)
+        if text is not None and text.layer is not None:
+            return text.layer
+        current = block_next_by_key.get(current, 0)
+    return None
+
+
+def _refdes_inner_layer_map(
+    payload: BRDLayout, layer_names: list[str], string_by_id: dict[int, str]
+) -> dict[int, str]:
+    if not layer_names:
+        return {}
+    best_score = 0
+    best_map: dict[int, str] = {}
+    for layer_list in payload.layers or []:
+        names = _layer_names(layer_list, string_by_id)
+        candidate, score = _refdes_inner_layer_map_candidate(names, layer_names)
+        if score > best_score:
+            best_score = score
+            best_map = candidate
+    return best_map
+
+
+def _refdes_inner_layer_map_candidate(
+    names: list[str], layer_names: list[str]
+) -> tuple[dict[int, str], int]:
+    result: dict[int, str] = {}
+    first_match_index: int | None = None
+    non_refdes_layer_name_count = 0
+    for index, name in enumerate(names):
+        layer_name = _layer_name_from_refdes_pair_name(name, layer_names)
+        if layer_name is not None:
+            result[index + 2] = layer_name
+            if first_match_index is None:
+                first_match_index = index
+            continue
+        if _layer_name_from_refdes_custom_name(name, layer_names) is not None:
+            non_refdes_layer_name_count += 1
+    if not result:
+        return {}, 0
+    score = len(result) * 10
+    score -= (first_match_index or 0) * 20
+    score -= non_refdes_layer_name_count * 5
+    return result, score
+
+
+def _layer_name_from_refdes_pair_name(name: str, layer_names: list[str]) -> str | None:
+    token = _normalized_layer_token(name)
+    for layer_name in sorted(layer_names, key=len, reverse=True):
+        if _stackup_endpoint_kind(layer_name) is not None:
+            continue
+        layer_token = _normalized_layer_token(layer_name)
+        if not layer_token:
+            continue
+        if token in {f"assembly_{layer_token}", f"display_{layer_token}"}:
+            return layer_name
+    return None
+
+
+def _layer_name_from_refdes_custom_name(
+    name: str, layer_names: list[str]
+) -> str | None:
+    token = _normalized_layer_token(name)
+    for layer_name in sorted(layer_names, key=len, reverse=True):
+        if _stackup_endpoint_kind(layer_name) is not None:
+            continue
+        layer_token = _normalized_layer_token(layer_name)
+        if not layer_token:
+            continue
+        if token == layer_token or token.endswith(f"_{layer_token}"):
+            return layer_name
+    return None
+
+
+def _normalized_layer_token(name: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", name.casefold()).strip("_")
 
 
 def _component_side_from_layer(

@@ -70,7 +70,7 @@ def from_alg(payload: ALGLayout, *, build_connectivity: bool = True) -> Semantic
         SemanticNet(
             id=semantic_id("net", name, index),
             name=name,
-            role=role_from_net_name(name),
+            role="no_net" if name == ALLEGRO_NO_NET_NAME else role_from_net_name(name),
             source=source_ref("alg", "net_names", name),
         )
         for index, name in enumerate(net_names)
@@ -1428,8 +1428,11 @@ def _semantic_primitives(
     return primitives
 
 
+ALLEGRO_NO_NET_NAME = "NONET"
+
+
 def _net_names(payload: ALGLayout) -> list[str]:
-    names: list[str] = ["NoNet"]
+    names: list[str] = [ALLEGRO_NO_NET_NAME]
     for pin in payload.pins or []:
         unique_append(names, pin.net_name)
     for pad in payload.pads or []:
@@ -1442,7 +1445,7 @@ def _net_names(payload: ALGLayout) -> list[str]:
 
 
 def _alg_net_name(name: str | None) -> str:
-    return name if name else "NoNet"
+    return name if name else ALLEGRO_NO_NET_NAME
 
 
 def _track_group_id(record_tag: str | None) -> str | None:

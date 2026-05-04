@@ -8,10 +8,12 @@ from typing import Literal
 SourceFormat = Literal["aedb", "auroradb", "odbpp", "brd", "alg", "altium"]
 TargetFormat = Literal["aaf", "auroradb", "odbpp"]
 AEDBParseProfile = Literal["full", "auroradb-minimal"]
+AEDBBackend = Literal["pyedb", "def-binary"]
 
 
 @dataclass(slots=True)
 class SourceLoadOptions:
+    aedb_backend: AEDBBackend = "pyedb"
     aedt_version: str | None = None
     component_center_source: Literal["pin-bbox", "layout-instance"] = "pin-bbox"
     aedb_parse_profile: AEDBParseProfile = "full"

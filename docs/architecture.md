@@ -30,7 +30,7 @@ Aurora Translator 的核心目标是把不同 PCB/封装相关数据源解析成
 - **语义层独立**：semantic 模块消费格式对象或格式 JSON，生成统一 PCB 语义对象，不反向污染格式模型。
 - **schema 可生成**：机器可读 JSON schema 由模型生成或由模型定义维护，并跟随格式级 schema 版本。
 - **版本分层**：项目版本、格式解析器版本、格式 JSON schema 版本分开管理。
-- **重计算放底层**：对 ODB++、BRD 和 ALG 这类结构化解析任务，底层使用 Rust 解析核心，并同时暴露 PyO3 native 模块和 CLI；Python 负责项目集成、模型校验、文档和 CLI 编排。
+- **重计算放底层**：对 AEDB `.def`、ODB++、BRD、ALG 和 Altium 这类结构化解析任务，底层使用 Rust 解析核心，并同时暴露 PyO3 native 模块和 CLI；Python 负责项目集成、模型校验、文档和 CLI 编排。
 - **AAF 只作为 AuroraDB target 的内部过渡格式**：它仍然支持 inspect/compile，但不再作为顶层架构的中心。
 
 ## 总体结构
@@ -43,10 +43,10 @@ flowchart TD
     dump["cli/dump.py"]
     schema["cli/schema.py"]
 
-    sources["sources/*<br/>AEDB / AuroraDB / ODB++ / BRD / ALG"]
+    sources["sources/*<br/>AEDB / AuroraDB / ODB++ / BRD / ALG / Altium"]
     semantic["semantic/*<br/>SemanticBoard + adapters + passes"]
     targets["targets/*<br/>AuroraDB / ODB++ 导出"]
-    rust["crates/*_parser<br/>Rust ODB++ / BRD / ALG parsers"]
+    rust["crates/*_parser<br/>Rust AEDB DEF / ODB++ / BRD / ALG / Altium parsers"]
 
     cli --> convert
     cli --> inspect
@@ -73,6 +73,7 @@ flowchart TD
 | `targets/odbpp/` | `SemanticBoard -> ODB++` Python target wrapper，负责把 Semantic JSON 交给 Rust `odbpp_exporter` CLI 并接入 `convert --to odbpp`。 |
 | `pipeline/` | `source -> semantic -> target` 主流程编排。 |
 | `shared/` | 日志、性能统计、JSON 输出等共享工具。 |
+| `crates/aedb_parser/` | Rust AEDB `.def` 逆向解析和写回核心，同时提供 CLI 和 PyO3 native 模块；当前负责 length-prefixed text record / binary gap 扫描、AEDB `$begin` / `$end` DSL block summary、domain 抽取、binary via-tail / raw-point path 统计、source-fidelity `.def` roundtrip writer，以及 `.def` 对标准 AuroraDB 目录的对照检查，尚未替换默认 PyEDB 解析路径。 |
 | `crates/odbpp_parser/` | Rust ODB++ 解析核心，同时提供 CLI 和 PyO3 native 模块，负责读取目录/归档和解析 ODB++ 文本记录；summary-only、显式 step 和默认 auto-step details 路径会跳过非必要明细文件。 |
 | `crates/odbpp_exporter/` | Rust ODB++ target exporter，读取 `SemanticBoard` JSON 并写出 deterministic ODB++ 目录结构；`writer.rs` 作为模块入口，`writer/entity.rs`、`writer/features.rs`、`writer/attributes.rs`、`writer/components.rs`、`writer/package.rs`、`writer/eda_data.rs`、`writer/netlist.rs`、`writer/formatting.rs` 和 `writer/model.rs` 分别承载 entity 编排、feature records、attribute tables/layer attrlist、component records、EDA package records、EDA data、cadnet netlist、ODB++ 命名/格式化和 Semantic 输入模型。 |
 | `crates/brd_parser/` | Rust Allegro BRD 二进制解析核心，同时提供 CLI 和 PyO3 native 模块，负责解析 header、string table、对象块摘要和已建模的板级对象。 |
@@ -106,7 +107,7 @@ uv run python .\main.py ...
 
 ## AEDB 解析链路
 
-AEDB 解析完全在 Python 侧完成，依赖 PyEDB 的本地 `.NET` 后端。
+默认 AEDB 解析路径仍在 Python 侧完成，依赖 PyEDB 的本地 `.NET` 后端。`crates/aedb_parser/` 是新的原生 `.def` 逆向解析和写回核心，用于不依赖 AEDT 的 `.def` record/DSL 扫描、domain 抽取、JSON 摘要、byte-identical roundtrip 验证，以及与标准 AuroraDB 目录的对照检查；它还没有替换 `sources/aedb/parser.py` 的生产解析路径。
 
 ```mermaid
 flowchart LR
@@ -126,6 +127,8 @@ flowchart LR
 - `sources/aedb/extractors/layout.py` 负责组织各领域 extractor 并构建 payload。
 - `sources/aedb/models.py` 是 AEDB JSON 结构的权威定义。
 - `AEDBLayout.model_json_schema()` 生成机器可读 schema。
+- `crates/aedb_parser/` 目前提供 `parse`、`roundtrip` 和 `compare-auroradb` CLI：`parse` 输出 `.def` record / DSL / domain 摘要，包含 binary via-tail 坐标计数和 raw-point path Line/Larc segment 统计；`roundtrip` 从解析后的 record stream 写回 `.def`；`compare-auroradb` 将 `.def` domain 抽取结果与标准 AuroraDB 目录做名称和计数对照。
+- Python CLI 通过显式 `--aedb-backend def-binary` 接入该 Rust parser；默认 `--aedb-backend pyedb` 行为不变，`def-binary` 当前只支持 `inspect source` 和 `dump source-json`。
 - `convert --from aedb --to auroradb` 在未请求 `--source-output` / `--semantic-output` 时会自动使用 `auroradb-minimal` 解析 profile，只保存 AuroraDB 导出必需字段和运行时私有几何缓存，减少 path / polygon 解析时间。
 - 显式导出 AEDB JSON 或 Semantic JSON 时始终使用完整 `full` profile；也可以用 `--aedb-parse-profile full` 强制关闭自动最小化解析。
 
@@ -420,7 +423,7 @@ The current architecture follows a few principles:
 - **Independent semantic layer**: the semantic module consumes format objects or format JSON and produces unified PCB objects without polluting format models.
 - **Generated schemas**: machine-readable JSON schemas are generated from models or maintained by model definitions and are versioned at the format level.
 - **Layered versioning**: project version, format parser version, and format JSON schema version are managed separately.
-- **Heavy parsing at the lower layer**: ODB++, BRD, and ALG structured parsing is handled by Rust parser cores that expose both PyO3 native modules and CLIs; Python handles integration, validation, documentation, and CLI orchestration.
+- **Heavy parsing at the lower layer**: AEDB `.def`, ODB++, BRD, ALG, and Altium structured parsing is handled by Rust parser cores that expose both PyO3 native modules and CLIs; Python handles integration, validation, documentation, and CLI orchestration.
 - **AAF is an AuroraDB target detail**: it is still supported for inspect/compile work, but it is no longer treated as a top-level architecture center.
 
 ## Overall Structure
@@ -433,10 +436,10 @@ flowchart TD
     dump["cli/dump.py"]
     schema["cli/schema.py"]
 
-    sources["sources/*<br/>AEDB / AuroraDB / ODB++ / BRD / ALG"]
+    sources["sources/*<br/>AEDB / AuroraDB / ODB++ / BRD / ALG / Altium"]
     semantic["semantic/*<br/>SemanticBoard + adapters + passes"]
     targets["targets/*<br/>AuroraDB / ODB++ export"]
-    rust["crates/*_parser<br/>Rust ODB++ / BRD / ALG parsers"]
+    rust["crates/*_parser<br/>Rust AEDB DEF / ODB++ / BRD / ALG / Altium parsers"]
 
     cli --> convert
     cli --> inspect
@@ -464,6 +467,7 @@ flowchart TD
 | `targets/odbpp/` | The `SemanticBoard -> ODB++` Python target wrapper, which serializes Semantic JSON for the Rust `odbpp_exporter` CLI and wires it into `convert --to odbpp`. |
 | `pipeline/` | The `source -> semantic -> target` orchestration layer. |
 | `shared/` | Shared logging, runtime metrics, JSON output, and utility helpers. |
+| `crates/aedb_parser/` | Rust AEDB `.def` reverse-engineering parser and writer core, CLI, and PyO3 native module; currently scans length-prefixed text records and binary gaps, summarizes AEDB `$begin` / `$end` DSL blocks, extracts a domain model, summarizes binary via-tail / raw-point path records, writes source-fidelity `.def` roundtrips, and compares `.def` extraction with standard AuroraDB directories without replacing the default PyEDB path. |
 | `crates/odbpp_parser/` | Rust ODB++ parser core, CLI, and PyO3 native module for directory/archive reading and ODB++ text record parsing; summary-only, explicit-step, and default auto-step detail paths skip unnecessary detail files. |
 | `crates/brd_parser/` | Rust Allegro BRD binary parser core, CLI, and PyO3 native module for headers, string tables, block summaries, and modeled board objects. |
 | `crates/alg_parser/` | Rust Allegro extracta ALG text parser core, CLI, and PyO3 native module for streaming section headers, boards, layers, components, pins, padstacks, pads, vias, tracks, symbols, and outline records. |
@@ -498,7 +502,7 @@ Current routing:
 
 ## AEDB Parsing Flow
 
-AEDB parsing runs entirely on the Python side and depends on PyEDB's local `.NET` backend.
+The default AEDB parsing path still runs on the Python side and depends on PyEDB's local `.NET` backend. `crates/aedb_parser/` is the new native `.def` reverse-engineering and writer core for AEDT-free `.def` record/DSL scanning, domain extraction, JSON summaries, byte-identical roundtrip validation, and comparison against standard AuroraDB directories; it has not replaced the production `sources/aedb/parser.py` path yet.
 
 ```mermaid
 flowchart LR
@@ -518,6 +522,8 @@ Key points:
 - `sources/aedb/extractors/layout.py` coordinates domain extractors and builds the payload.
 - `sources/aedb/models.py` is the authoritative definition of the AEDB JSON structure.
 - `AEDBLayout.model_json_schema()` generates the machine-readable schema.
+- `crates/aedb_parser/` currently exposes `parse`, `roundtrip`, and `compare-auroradb` CLI commands: `parse` writes `.def` record / DSL / domain summaries, including binary via-tail coordinate counts and raw-point path Line/Larc segment statistics; `roundtrip` writes `.def` from the parsed record stream; and `compare-auroradb` compares `.def` domain extraction against a standard AuroraDB directory.
+- The Python CLI integrates this Rust parser only through explicit `--aedb-backend def-binary`; the default `--aedb-backend pyedb` behavior is unchanged, and `def-binary` currently supports only `inspect source` and `dump source-json`.
 - `convert --from aedb --to auroradb` automatically uses the `auroradb-minimal` parse profile when neither `--source-output` nor `--semantic-output` is requested; it keeps only fields and runtime-private geometry caches required by AuroraDB export to reduce path / polygon parse time.
 - Explicit AEDB JSON or Semantic JSON export always uses the complete `full` profile. Pass `--aedb-parse-profile full` to force full parsing on direct AuroraDB conversion.
 

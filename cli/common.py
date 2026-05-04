@@ -57,6 +57,15 @@ def add_source_arguments(parser: argparse.ArgumentParser) -> None:
             "The convert AEDB->AuroraDB path uses auroradb-minimal only when no intermediate JSON is requested."
         ),
     )
+    parser.add_argument(
+        "--aedb-backend",
+        choices=["pyedb", "def-binary"],
+        default="pyedb",
+        help=(
+            "AEDB parser backend. Default: pyedb. "
+            "def-binary calls the Rust .def parser for inspect/source-json only."
+        ),
+    )
     parser.add_argument("--step", help="ODB++ step to use for detailed extraction.")
     parser.add_argument(
         "--rust-binary",
@@ -83,6 +92,7 @@ def build_source_load_options(
     if aedb_parse_profile == "auto":
         aedb_parse_profile = "full"
     return SourceLoadOptions(
+        aedb_backend=getattr(args, "aedb_backend", "pyedb"),
         aedt_version=getattr(args, "aedt_version", None),
         component_center_source=getattr(args, "component_center_source", "pin-bbox"),
         aedb_parse_profile=aedb_parse_profile,

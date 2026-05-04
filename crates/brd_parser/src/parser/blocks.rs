@@ -415,7 +415,7 @@ fn parse_pin_def(
     if version.ge(FormatVersion::V172) {
         reader.skip(12)?;
     } else {
-        reader.skip(8)?;
+        reader.skip(4)?;
     }
     reader.skip_u32(1)?;
     if version.ge(FormatVersion::V180) {

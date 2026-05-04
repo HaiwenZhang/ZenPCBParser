@@ -26,6 +26,7 @@ Current source formats:
 
 Current Rust parser cores:
 
+- `crates/aedb_parser/`
 - `crates/odbpp_parser/`
 - `crates/brd_parser/`
 - `crates/alg_parser/`
@@ -58,6 +59,8 @@ the owning package or project doc and link to it.
 ## Validation Entry Points
 
 - Python compile: `uv run python -m compileall <paths>`
+- Rust AEDB DEF checks: `cargo test --manifest-path crates/aedb_parser/Cargo.toml`
+- Rust AEDB DEF/AuroraDB alignment: `crates/aedb_parser/target/debug/aedb_parser compare-auroradb <board.def> --auroradb <auroradb-dir>`
 - Rust BRD checks: `cargo test --manifest-path crates/brd_parser/Cargo.toml`
 - Rust ODB++ checks: `cargo test --manifest-path crates/odbpp_parser/Cargo.toml`
 - Rust ODB++ exporter checks: `cargo test --manifest-path crates/odbpp_exporter/Cargo.toml`

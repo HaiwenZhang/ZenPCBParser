@@ -85,9 +85,37 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.source_format == "aedb":
-        from aurora_translator.sources.aedb import AEDBParserError, parse_aedb
+        from aurora_translator.sources.aedb import (
+            AEDBParserError,
+            parse_aedb,
+            parse_aedb_def_binary,
+        )
 
         try:
+            if args.aedb_backend == "def-binary":
+                payload = parse_aedb_def_binary(
+                    args.input,
+                    include_details=False,
+                    rust_binary=args.rust_binary,
+                )
+                summary = payload.summary.model_dump()
+                if args.json:
+                    print(json.dumps(summary, ensure_ascii=False, indent=2))
+                else:
+                    print(f"AEDB DEF: {payload.metadata.source}")
+                    print(
+                        "Counts: "
+                        f"records={summary['record_count']}, "
+                        f"text_records={summary['text_record_count']}, "
+                        f"binary_records={summary['binary_record_count']}, "
+                        f"dsl_blocks={summary['dsl_block_count']}, "
+                        f"encrypted={summary['encrypted']}, "
+                        f"diagnostics={summary['diagnostic_count']}"
+                    )
+                print(f"Log written to: {log_path}")
+                log_run_complete(logger, "inspect")
+                return 0
+
             payload = parse_aedb(
                 args.input,
                 version=args.aedt_version,

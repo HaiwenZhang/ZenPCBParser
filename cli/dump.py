@@ -117,6 +117,11 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     try:
         options = build_source_load_options(args, include_details=True)
+        if args.source_format == "aedb" and options.aedb_backend == "def-binary":
+            raise ValueError(
+                "AEDB def-binary backend currently supports dump source-json only; "
+                "use the default pyedb backend for Semantic JSON."
+            )
         options.aedb_parse_profile = resolve_aedb_parse_profile_for_target(
             args,
             source_format=args.source_format,
