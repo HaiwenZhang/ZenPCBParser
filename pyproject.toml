@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aurora-translator"
-version = "1.0.42"
+version = "1.0.43"
 description = "Translate and export PCB layout data, starting with AEDB parsing."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -45,6 +45,8 @@ packages = [
     "aurora_translator.sources",
     "aurora_translator.sources.aedb",
     "aurora_translator.sources.aedb.extractors",
+    "aurora_translator.sources.alg",
+    "aurora_translator.sources.brd",
     "aurora_translator.sources.auroradb",
     "aurora_translator.sources.odbpp",
     "aurora_translator.targets",
@@ -62,6 +64,8 @@ aurora_translator = "."
 "aurora_translator.sources" = "sources"
 "aurora_translator.sources.aedb" = "sources/aedb"
 "aurora_translator.sources.aedb.extractors" = "sources/aedb/extractors"
+"aurora_translator.sources.alg" = "sources/alg"
+"aurora_translator.sources.brd" = "sources/brd"
 "aurora_translator.sources.auroradb" = "sources/auroradb"
 "aurora_translator.sources.odbpp" = "sources/odbpp"
 "aurora_translator.targets" = "targets"

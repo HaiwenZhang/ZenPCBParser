@@ -79,4 +79,34 @@ def load_source_payload(
                 rust_binary=load_options.rust_binary,
             )
 
+    if source_format == "brd":
+        from aurora_translator.sources.brd import parse_brd
+
+        with log_timing(
+            logger,
+            "load Allegro BRD source payload",
+            banner=True,
+            source=resolved_source,
+        ):
+            return parse_brd(
+                resolved_source,
+                include_details=load_options.include_details,
+                rust_binary=load_options.rust_binary,
+            )
+
+    if source_format == "alg":
+        from aurora_translator.sources.alg import parse_alg
+
+        with log_timing(
+            logger,
+            "load Allegro extracta ALG source payload",
+            banner=True,
+            source=resolved_source,
+        ):
+            return parse_alg(
+                resolved_source,
+                include_details=load_options.include_details,
+                rust_binary=load_options.rust_binary,
+            )
+
     raise ValueError(f"Unsupported source format: {source_format!r}")

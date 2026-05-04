@@ -887,7 +887,7 @@ def _component_footprint_pad_score(
 
 
 def _source_prefers_component_footprint_pads(source_format: str | None) -> bool:
-    return (source_format or "").casefold() == "odbpp"
+    return (source_format or "").casefold() in {"odbpp", "alg"}
 
 
 def _package_footprint_pad_commands(

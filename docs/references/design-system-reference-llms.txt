@@ -1,0 +1,10 @@
+Aurora Translator has no production frontend design system today.
+
+If a frontend is added, keep the LLM-readable design reference here. It should
+summarize tokens, components, layout rules, accessibility rules, and screenshot
+verification commands in plain text.
+
+Relevant local docs:
+- docs/FRONTEND.md
+- docs/PRODUCT_SENSE.md
+- docs/QUALITY_SCORE.md

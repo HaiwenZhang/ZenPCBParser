@@ -1,0 +1,5 @@
+Nixpacks is not part of the current Aurora Translator toolchain.
+
+If deployment work introduces Nixpacks, replace this placeholder with a concise
+LLM-readable reference that records the exact project commands, build phases,
+environment variables, and validation steps used by this repository.

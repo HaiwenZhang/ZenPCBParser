@@ -12,6 +12,8 @@ from aurora_translator.pipeline.loaders import load_source_payload
 from aurora_translator.shared.jsonio import write_json_file
 from aurora_translator.shared.logging import log_run_complete
 from aurora_translator.sources.aedb import AEDBParserError
+from aurora_translator.sources.alg import ALGParserError
+from aurora_translator.sources.brd import BRDParserError
 from aurora_translator.sources.odbpp import ODBPPParserError
 
 from .common import (
@@ -94,7 +96,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         except (
             AEDBParserError,
+            ALGParserError,
             ODBPPParserError,
+            BRDParserError,
             OSError,
             ValidationError,
             ValueError,
@@ -124,7 +128,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
     except (
         AEDBParserError,
+        ALGParserError,
         ODBPPParserError,
+        BRDParserError,
         OSError,
         ValidationError,
         ValueError,

@@ -498,6 +498,7 @@ def _direct_add_primitives(
                 primitive,
                 net_name,
                 layer_name,
+                source_format=board.metadata.source_format,
                 source_unit=board.units,
             ):
                 geometry_index += 1
@@ -621,10 +622,14 @@ def _direct_add_polygon_geometry(
     net_name: str,
     layer_name: str,
     *,
+    source_format: str | None,
     source_unit: str | None,
 ) -> bool:
-    point_parts = _polygon_vertex_parts(primitive.geometry, source_unit=source_unit)
-    if len(point_parts) < 3:
+    min_points = _polygon_min_points(primitive, source_format)
+    point_parts = _polygon_vertex_parts(
+        primitive.geometry, source_unit=source_unit, min_points=min_points
+    )
+    if len(point_parts) < min_points:
         return False
     solid = (
         "N"
@@ -632,13 +637,23 @@ def _direct_add_polygon_geometry(
         or _truthy(primitive.geometry.get("is_void"))
         else "Y"
     )
-    void_geometries = _void_geometry_parts(primitive, source_unit=source_unit)
+    void_geometries = _void_geometry_parts(
+        primitive, source_unit=source_unit, min_points=min_points
+    )
     builder.add_net_geometry(
         net_name,
         layer_name,
         _direct_polygon_netgeom_block(point_parts, void_geometries, solid=solid),
     )
     return True
+
+
+def _polygon_min_points(primitive: SemanticPrimitive, source_format: str | None) -> int:
+    if (source_format or "").casefold() in {"alg", "brd"} and str(
+        primitive.geometry.get("record_kind") or ""
+    ).casefold() == "shape":
+        return 2
+    return 3
 
 
 def _direct_polygon_netgeom_block(

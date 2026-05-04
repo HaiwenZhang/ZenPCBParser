@@ -1,0 +1,14 @@
+Aurora Translator uses uv for Python environment and command execution.
+
+Common local commands:
+- uv sync --locked
+- uv run python .\main.py --help
+- uv run python .\main.py schema --format semantic
+- uv run python -m compileall <paths>
+- uv run ruff format --check .
+- uv run ruff check .
+
+Rules:
+- Prefer uv-managed commands for Python tasks.
+- Do not edit uv.lock manually.
+- If dependencies change, update pyproject.toml and uv.lock together through uv.

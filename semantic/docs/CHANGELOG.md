@@ -8,6 +8,24 @@
 
 [English](#en) | [返回顶部](#top)
 
+## 0.7.5
+
+- ALG -> SemanticBoard 现在会按 `GRAPHIC_DATA_10` 区分 `CONNECT`、`SHAPE` 和 `VOID`：`CONNECT` 仍导出 trace / arc，`SHAPE` 会按 `RECORD_TAG` group 聚合为 polygon，`VOID` 会作为 polygon void 导出到 `geometry.voids`。
+- BRD -> SemanticBoard 现在会把 track / shape segment 坐标链导出为 trace、arc 和 polygon，并把 0x34 keepout 链挂到 shape polygon 的 `geometry.voids`。
+- Semantic JSON schema 保持 `0.7.1`；字段结构不变，但 Allegro 来源的 `primitives` 会从大量未分组线/弧恢复为可导出的走线、铜皮 polygon 和 `PolygonHole`。
+
+## 0.7.4
+
+- ALG -> SemanticBoard 现在会把 Cadence Allegro extracta 文本中的 conductor layer、net、component/package、pin、component pad、via template、via、trace/arc/rectangle primitive 和 board extents 转成统一语义对象，使 ALG -> AuroraDB 能输出 stackup、component placement、pad `NetGeom`、`NetVias.Via` 和布线图元。
+- 对缺少 `CLASS=PIN` 铜皮 pad 记录但存在逻辑 pin 的 ALG pin，会保留 pin 并生成按源单位换算的默认圆形 pad，同时写入 `alg.default_pad_geometry` info 级 diagnostic。
+- Semantic JSON schema 更新到 `0.7.1`；结构字段不变，但 `source_format` 枚举新增 `alg`。
+
+## 0.7.3
+
+- BRD -> SemanticBoard 现在会把物理 ETCH 层、net、placed pad bbox、component / pin / footprint、padstack via template 和 via 转成统一语义对象，使 BRD -> AuroraDB 能输出基础 stackup、component placement、pad `NetGeom` 和 `NetVias.Via`。
+- Track / shape segment 链仍保留在 BRD source JSON 中，并通过 `brd.semantic_segment_geometry_deferred` diagnostic 标记后续补齐。
+- Semantic JSON schema 保持 `0.7.0`；未新增字段，但 BRD 来源的 `shapes`、`via_templates`、`components`、`pins`、`pads` 和 `vias` 数量会从空集合变为可导出的基础几何。
+
 ## 0.7.1
 
 - AEDB polygon pad shape 的 arc-height 映射现在遵循 AEDB raw-point 约定：`arc_height < 0` 写为 AuroraDB `CCW=Y`，使 semantic shape arc values 与 target exporter 保持一致。
@@ -400,6 +418,24 @@
 ## English
 
 [中文](#zh) | [Back to top](#top)
+
+## 0.7.5
+
+- ALG -> SemanticBoard now distinguishes `CONNECT`, `SHAPE`, and `VOID` by `GRAPHIC_DATA_10`: `CONNECT` still exports traces/arcs, `SHAPE` records are grouped by `RECORD_TAG` into polygons, and `VOID` records are exported through `geometry.voids`.
+- BRD -> SemanticBoard now exports track and shape segment coordinate chains as traces, arcs, and polygons, and attaches 0x34 keepout chains to shape polygons through `geometry.voids`.
+- Semantic JSON schema remains `0.7.1`; the field structure is unchanged, but Allegro-derived `primitives` now collapse large ungrouped line/arc sets into exportable routing, copper polygons, and `PolygonHole` geometry.
+
+## 0.7.4
+
+- ALG -> SemanticBoard now maps Cadence Allegro extracta conductor layers, nets, components/packages, pins, component pads, via templates, vias, trace/arc/rectangle primitives, and board extents into unified semantic objects, enabling ALG -> AuroraDB output for stackup, component placement, pad `NetGeom`, `NetVias.Via`, and routed primitives.
+- For ALG pins that have logical pin records but no matching `CLASS=PIN` copper pad records, the adapter keeps the pin, creates a source-unit-scaled default circular pad, and emits an `alg.default_pad_geometry` info diagnostic.
+- Semantic JSON schema is updated to `0.7.1`; field structure is unchanged, but the `source_format` enum now includes `alg`.
+
+## 0.7.3
+
+- BRD -> SemanticBoard now converts physical ETCH layers, nets, placed-pad bounding boxes, components / pins / footprints, padstack via templates, and vias into unified semantic objects, so BRD -> AuroraDB can emit basic stackup, component placements, pad `NetGeom`, and `NetVias.Via` records.
+- Track and shape segment chains remain in BRD source JSON and are flagged by the `brd.semantic_segment_geometry_deferred` diagnostic for later mapping.
+- Semantic JSON schema remains `0.7.0`; no fields were added, but BRD-derived `shapes`, `via_templates`, `components`, `pins`, `pads`, and `vias` now populate exportable base geometry instead of empty collections.
 
 ## 0.7.1
 

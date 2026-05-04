@@ -12,6 +12,8 @@ from aurora_translator.pipeline import convert_source_to_target
 from aurora_translator.shared.jsonio import write_json_file
 from aurora_translator.shared.logging import log_run_complete
 from aurora_translator.sources.aedb import AEDBParserError
+from aurora_translator.sources.alg import ALGParserError
+from aurora_translator.sources.brd import BRDParserError
 from aurora_translator.sources.odbpp import ODBPPParserError
 from aurora_translator.sources.odbpp.coverage import build_odbpp_coverage_report
 
@@ -35,7 +37,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--from",
         dest="source_format",
-        choices=["aedb", "auroradb", "odbpp"],
+        choices=["aedb", "auroradb", "odbpp", "brd", "alg"],
         required=True,
     )
     parser.add_argument(
@@ -112,7 +114,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
     except (
         AEDBParserError,
+        ALGParserError,
         ODBPPParserError,
+        BRDParserError,
         OSError,
         ValidationError,
         ValueError,

@@ -532,30 +532,34 @@ def _polygon_vertex_values(geometry: Any, *, source_unit: str | None) -> list[st
 
 
 def _void_geometry_parts(
-    primitive: SemanticPrimitive, *, source_unit: str | None
+    primitive: SemanticPrimitive, *, source_unit: str | None, min_points: int = 3
 ) -> list[list[list[str]]]:
     raw_voids = primitive.geometry.get("voids")
     if not isinstance(raw_voids, (list, tuple)):
         return []
     voids: list[list[list[str]]] = []
     for raw_void in raw_voids:
-        point_parts = _polygon_vertex_parts(raw_void, source_unit=source_unit)
-        if len(point_parts) >= 3:
+        point_parts = _polygon_vertex_parts(
+            raw_void, source_unit=source_unit, min_points=min_points
+        )
+        if len(point_parts) >= min_points:
             voids.append(point_parts)
     return voids
 
 
-def _polygon_vertex_parts(geometry: Any, *, source_unit: str | None) -> list[list[str]]:
+def _polygon_vertex_parts(
+    geometry: Any, *, source_unit: str | None, min_points: int = 3
+) -> list[list[str]]:
     parts = _polygon_vertex_parts_from_arcs(
         _geometry_field(geometry, "arcs"), source_unit=source_unit
     )
-    if len(parts) >= 3:
+    if len(parts) >= min_points:
         return parts
 
     parts = _polygon_vertex_parts_from_raw_points(
         _geometry_field(geometry, "raw_points"), source_unit=source_unit
     )
-    if len(parts) >= 3:
+    if len(parts) >= min_points:
         return parts
 
     points = _polygon_points(geometry, source_unit=source_unit)
@@ -1280,6 +1284,9 @@ def _odbpp_component_needs_bottom_flip(
     *,
     source_format: str | None,
 ) -> bool:
+    if (source_format or "").casefold() == "alg":
+        mirror = component.attributes.get("mirror", "")
+        return component.side == "bottom" or _truthy(mirror)
     return _source_rotations_are_clockwise(source_format) and component.side == "bottom"
 
 

@@ -8,7 +8,7 @@ from aurora_translator.pipeline.types import SourceLoadOptions
 from aurora_translator.shared.logging import configure_logging, log_run_start
 
 
-SOURCE_FORMAT_CHOICES = ["aedb", "auroradb", "odbpp"]
+SOURCE_FORMAT_CHOICES = ["aedb", "auroradb", "odbpp", "brd", "alg"]
 TARGET_FORMAT_CHOICES = ["aaf", "auroradb"]
 
 
@@ -60,7 +60,7 @@ def add_source_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--step", help="ODB++ step to use for detailed extraction.")
     parser.add_argument(
         "--rust-binary",
-        help="Explicit path to the compiled odbpp_parser executable. Providing this forces the CLI backend.",
+        help="Explicit path to the compiled Rust source parser executable. Providing this forces the CLI backend.",
     )
     parser.add_argument(
         "--include-raw-blocks",

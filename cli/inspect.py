@@ -26,7 +26,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     source_parser = subparsers.add_parser(
-        "source", help="Inspect an AEDB, ODB++, or AuroraDB source."
+        "source", help="Inspect an AEDB, ODB++, BRD, ALG, or AuroraDB source."
     )
     source_parser.add_argument(
         "--format", dest="source_format", choices=SOURCE_FORMAT_CHOICES, required=True
@@ -140,6 +140,75 @@ def main(argv: Sequence[str] | None = None) -> int:
                 f"steps={summary['step_count']}, "
                 f"layers={summary['layer_count']}, "
                 f"components={summary['component_count']}, "
+                f"nets={summary['net_count']}, "
+                f"diagnostics={summary['diagnostic_count']}"
+            )
+        print(f"Log written to: {log_path}")
+        log_run_complete(logger, "inspect")
+        return 0
+
+    if args.source_format == "brd":
+        from aurora_translator.sources.brd import BRDParserError, parse_brd
+
+        try:
+            payload = parse_brd(
+                args.input,
+                include_details=False,
+                rust_binary=args.rust_binary,
+            )
+        except BRDParserError as exc:
+            logger.exception("BRD inspection failed")
+            print(f"Failed to inspect BRD source: {exc}")
+            print(f"Log written to: {log_path}")
+            return 1
+        summary = payload.summary.model_dump()
+        if args.json:
+            print(json.dumps(summary, ensure_ascii=False, indent=2))
+        else:
+            print(f"BRD: {payload.metadata.source}")
+            print(
+                "Counts: "
+                f"format={summary['format_version']}, "
+                f"strings={summary['string_count']}, "
+                f"objects={summary['object_count_parsed']}/{summary['object_count_declared']}, "
+                f"nets={summary['net_count']}, "
+                f"padstacks={summary['padstack_count']}, "
+                f"footprints={summary['footprint_count']}, "
+                f"vias={summary['via_count']}, "
+                f"diagnostics={summary['diagnostic_count']}"
+            )
+        print(f"Log written to: {log_path}")
+        log_run_complete(logger, "inspect")
+        return 0
+
+    if args.source_format == "alg":
+        from aurora_translator.sources.alg import ALGParserError, parse_alg
+
+        try:
+            payload = parse_alg(
+                args.input,
+                include_details=False,
+                rust_binary=args.rust_binary,
+            )
+        except ALGParserError as exc:
+            logger.exception("ALG inspection failed")
+            print(f"Failed to inspect ALG source: {exc}")
+            print(f"Log written to: {log_path}")
+            return 1
+        summary = payload.summary.model_dump()
+        if args.json:
+            print(json.dumps(summary, ensure_ascii=False, indent=2))
+        else:
+            print(f"ALG: {payload.metadata.source}")
+            print(
+                "Counts: "
+                f"sections={summary['section_count']}, "
+                f"layers={summary['metal_layer_count']}/{summary['layer_count']}, "
+                f"components={summary['component_count']}, "
+                f"pins={summary['pin_count']}, "
+                f"pads={summary['pad_count']}, "
+                f"vias={summary['via_count']}, "
+                f"tracks={summary['track_count']}, "
                 f"nets={summary['net_count']}, "
                 f"diagnostics={summary['diagnostic_count']}"
             )
