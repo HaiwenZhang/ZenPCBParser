@@ -371,7 +371,12 @@ impl<'a> OdbPackage<'a> {
                 continue;
             };
             let kind = primitive.kind.to_ascii_lowercase();
-            if kind.contains("polygon")
+            if (kind.contains("net_geometry") || kind == "pad")
+                && geometry_string(&primitive.geometry, "shape_id").is_some()
+                && geometry_point(&primitive.geometry, "location").is_some()
+            {
+                self.add_symbol_pad_primitive(&primitive, &layer_name);
+            } else if kind.contains("polygon")
                 || !geometry_points(&primitive.geometry, "raw_points").is_empty()
             {
                 self.add_surface_primitive(&primitive, &layer_name);
@@ -455,6 +460,52 @@ impl<'a> OdbPackage<'a> {
                 center,
                 symbol,
                 clockwise,
+                id: feature_id(primitive.id.as_str(), primitive.source.raw_id.as_deref()),
+            })
+        };
+        self.push_feature_link(
+            primitive.net_id.as_deref(),
+            layer_name,
+            feature_index,
+            "C",
+            "TRC",
+            None,
+        );
+    }
+
+    fn add_symbol_pad_primitive(&mut self, primitive: &SemanticPrimitive, layer_name: &str) {
+        let Some(center) = geometry_point(&primitive.geometry, "location") else {
+            return;
+        };
+        let Some(shape) = geometry_string(&primitive.geometry, "shape_id")
+            .as_deref()
+            .and_then(|id| self.shape_by_id.get(id).copied())
+        else {
+            return;
+        };
+        let location = geometry_value(&primitive.geometry, "location");
+        let rotation = location
+            .and_then(|value| geometry_value(value, "rotation"))
+            .map(|value| rotation_to_odb_degrees(Some(value), &self.source_format))
+            .or_else(|| {
+                geometry_value(&primitive.geometry, "rotation")
+                    .map(|value| rotation_to_odb_degrees(Some(value), &self.source_format))
+            })
+            .unwrap_or(0.0);
+        let mirror = location
+            .and_then(|value| geometry_bool(value, "flip_x"))
+            .or_else(|| geometry_bool(&primitive.geometry, "mirror_x"))
+            .unwrap_or(false);
+        let feature_index = {
+            let symbol_name = symbol_for_shape(shape, self.units);
+            let center = self.units.point(center);
+            let layer = self.feature_layer_mut(layer_name);
+            let symbol = layer.symbol_index(symbol_name);
+            layer.push(FeatureRecord::Pad {
+                center,
+                symbol,
+                rotation,
+                mirror,
                 id: feature_id(primitive.id.as_str(), primitive.source.raw_id.as_deref()),
             })
         };
@@ -1080,7 +1131,7 @@ fn symbol_for_shape(shape: &SemanticShape, units: UnitScale) -> String {
             fmt(units.length(height))
         );
     }
-    if kind == "roundedrectangle" || kind == "oval" {
+    if kind == "roundedrectangle" || kind == "rectcutcorner" || kind == "oval" {
         let width = value_number(shape.values.get(2)).unwrap_or(0.1);
         let height = value_number(shape.values.get(3)).unwrap_or(width);
         let radius = value_number(shape.values.get(4)).unwrap_or(width.min(height) / 2.0);

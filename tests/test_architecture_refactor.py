@@ -188,6 +188,7 @@ class ArchitectureRefactorTests(unittest.TestCase):
 
         self.assertEqual(_standardize_name("R 1/A-B"), "R_1_A_B")
         self.assertEqual(_auroradb_net_name('"NoNet"'), "NoNet")
+        self.assertEqual(_auroradb_net_name("NONET"), "NONET")
         self.assertEqual(_tuple_value("A,B"), '"A,B"')
         self.assertEqual(_aaf_atom("U 1"), '"U 1"')
         self.assertLess(_pin_sort_key("2"), _pin_sort_key("10"))

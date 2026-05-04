@@ -46,7 +46,7 @@ from aurora_translator.semantic.passes import (
 
 T = TypeVar("T")
 ODBPP_NO_NET_NAME = "NoNet"
-_ODBPP_NO_NET_ALIASES = {"$none$", "$none", "none$", "nonet"}
+_ODBPP_NO_NET_ALIASES = {"$none$", "$none", "none$"}
 _VIA_PAD_MATCH_TOLERANCE = 1e-3
 
 

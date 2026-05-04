@@ -95,7 +95,7 @@ def _geometry_source_unit(board: SemanticBoard) -> str | None:
 def _preserve_board_units(board: SemanticBoard) -> bool:
     source_format = (board.metadata.source_format or "").casefold()
     unit = (board.units or "").casefold()
-    return source_format in {"alg", "brd"} and unit in {
+    return source_format in {"alg", "auroradb", "brd", "odbpp"} and unit in {
         "mm",
         "millimeter",
         "millimeters",

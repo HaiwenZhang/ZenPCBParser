@@ -1045,8 +1045,9 @@ def _component_pad_net_vias(
         )
         if net_name is None or via_template_id is None or pad.position is None:
             continue
-        x = _length_to_mil(pad.position.x, source_unit=source_unit)
-        y = _length_to_mil(pad.position.y, source_unit=source_unit)
+        via_position = _pad_via_position(pad) or pad.position
+        x = _length_to_mil(via_position.x, source_unit=source_unit)
+        y = _length_to_mil(via_position.y, source_unit=source_unit)
         if x is None or y is None:
             continue
         rotation = _format_rotation(_pad_rotation(pad), source_format=source_format)
@@ -1092,7 +1093,7 @@ def _shape_code(geometry_type: str) -> str:
         return "0"
     if text in {"rectangle", "square"}:
         return "1"
-    if text in {"roundedrectangle", "oval"}:
+    if text in {"roundedrectangle", "rectcutcorner", "oval"}:
         return "2"
     if text == "polygon":
         return "3"
@@ -1104,6 +1105,25 @@ def _format_shape_value(value: str | float | int, *, source_unit: str | None) ->
     if numeric is not None:
         return _format_number(numeric)
     return str(value)
+
+
+def _pad_via_position(pad: SemanticPad) -> SemanticPoint | None:
+    value = pad.geometry.get("via_position")
+    if value is None:
+        return None
+    if isinstance(value, SemanticPoint):
+        return value
+    if isinstance(value, dict):
+        x = _number(value.get("x"))
+        y = _number(value.get("y"))
+    elif isinstance(value, (list, tuple)) and len(value) >= 2:
+        x = _number(value[0])
+        y = _number(value[1])
+    else:
+        return None
+    if x is None or y is None:
+        return None
+    return SemanticPoint(x=x, y=y)
 
 
 def _format_geometry_shape_values(

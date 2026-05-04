@@ -1,6 +1,6 @@
 use super::components::PinNetKey;
 use super::entity::{point_from_semantic, value_number, OdbPackage};
-use super::formatting::fmt;
+use super::formatting::{fmt, odb_token};
 use super::model::{Point, SemanticShape};
 use std::collections::BTreeMap;
 
@@ -33,7 +33,7 @@ impl<'a> OdbPackage<'a> {
     pub(super) fn cadnet_text(&self) -> String {
         let mut text = String::from("H optimize n staggered n\n");
         for (index, (_net_id, net_name)) in self.net_names.iter().enumerate() {
-            text.push_str(&format!("${} {}\n", index, net_name));
+            text.push_str(&format!("${} {}\n", index, odb_token(net_name)));
         }
         text.push_str("#\n#Netlist points\n#\n");
         for record in self.cadnet_records() {

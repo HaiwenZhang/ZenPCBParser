@@ -1,6 +1,6 @@
 use super::attributes::empty_feature_attribute_tables_text;
 use super::entity::{MatrixLayer, OdbPackage, RUST_EXPORTER_VERSION};
-use super::formatting::{fmt, write_kv};
+use super::formatting::{fmt, odb_token, write_kv};
 use std::collections::BTreeMap;
 
 impl<'a> OdbPackage<'a> {
@@ -14,7 +14,7 @@ impl<'a> OdbPackage<'a> {
         ));
         write_kv(&mut text, "UNITS", self.units.odb_units);
         text.push_str("LYR");
-        for name in layer_index.keys() {
+        for name in &layer_index.names {
             text.push(' ');
             text.push_str(name);
         }
@@ -22,7 +22,7 @@ impl<'a> OdbPackage<'a> {
         text.push_str(&empty_feature_attribute_tables_text());
 
         for (net_id, net_name) in &self.net_names {
-            text.push_str(&format!("NET {}\n", net_name));
+            text.push_str(&format!("NET {}\n", odb_token(net_name)));
             for pin in self
                 .components
                 .iter()
@@ -47,7 +47,7 @@ impl<'a> OdbPackage<'a> {
                 } else {
                     text.push_str(&format!("SNT {}\n", link.subnet_type));
                 }
-                if let Some(index) = layer_index.get(&link.layer_name) {
+                if let Some(index) = layer_index.by_name.get(&link.layer_name) {
                     text.push_str(&format!(
                         "FID {} {} {}\n",
                         link.class_code, index, link.feature_index
@@ -90,13 +90,20 @@ impl<'a> OdbPackage<'a> {
     }
 }
 
-fn eda_layer_index(matrix_layers: &[MatrixLayer]) -> BTreeMap<String, usize> {
-    let mut map = BTreeMap::new();
+struct EdaLayerIndex {
+    names: Vec<String>,
+    by_name: BTreeMap<String, usize>,
+}
+
+fn eda_layer_index(matrix_layers: &[MatrixLayer]) -> EdaLayerIndex {
+    let mut names = Vec::new();
+    let mut by_name = BTreeMap::new();
     for layer in matrix_layers {
         if layer.layer_type == "SIGNAL" || layer.layer_type == "DRILL" {
-            let index = map.len();
-            map.insert(layer.name.clone(), index);
+            let index = names.len();
+            names.push(layer.name.clone());
+            by_name.insert(layer.name.clone(), index);
         }
     }
-    map
+    EdaLayerIndex { names, by_name }
 }

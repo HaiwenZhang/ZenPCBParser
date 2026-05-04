@@ -310,7 +310,7 @@ JSON payload 中统一输出：
 | BRD JSON schema | `0.4.0` |
 | ALG parser | `0.1.1` |
 | ALG JSON schema | `0.2.0` |
-| Semantic parser | `0.7.6` |
+| Semantic parser | `0.7.7` |
 | Semantic JSON schema | `0.7.1` |
 
 ## 开发和构建
@@ -677,7 +677,7 @@ Current versions:
 | BRD JSON schema | `0.4.0` |
 | ALG parser | `0.1.1` |
 | ALG JSON schema | `0.2.0` |
-| Semantic parser | `0.7.6` |
+| Semantic parser | `0.7.7` |
 | Semantic JSON schema | `0.7.1` |
 
 ## Development And Build

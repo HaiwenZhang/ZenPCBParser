@@ -35,7 +35,7 @@ def _auroradb_net_name(net_name: str) -> str:
     cleaned = str(net_name).strip()
     if len(cleaned) >= 2 and cleaned[0] == '"' and cleaned[-1] == '"':
         cleaned = cleaned[1:-1].replace('\\"', '"')
-    if cleaned.casefold() == "nonet":
+    if cleaned == "NoNet" or cleaned.casefold() in {"$none$", "$none", "none$"}:
         return "NoNet"
     return cleaned.upper()
 

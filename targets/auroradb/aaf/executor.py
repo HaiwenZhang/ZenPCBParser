@@ -973,7 +973,10 @@ def _normalize_layout_unit(unit: str) -> str:
 
 def _normalize_net_name(net_name: str) -> str:
     cleaned = strip_wrapping_quotes(net_name.strip())
-    if cleaned.casefold() == AURORADB_NO_NET_KEYWORD.casefold():
+    if (
+        cleaned == AURORADB_NO_NET_KEYWORD
+        or cleaned.casefold() in {"$none$", "$none", "none$"}
+    ):
         return AURORADB_NO_NET_KEYWORD
     return cleaned.upper()
 

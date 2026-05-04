@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-from math import radians
+from math import cos, radians, sin
+import re
 from typing import Iterable
 
 from aurora_translator.semantic.adapters.utils import (
@@ -59,6 +60,18 @@ BRD_UNKNOWN_MM_PER_RAW = 0.0001
 DEFAULT_PAD_DIAMETER_MM = 0.1
 ETCH_CLASS_CODE = 0x06
 FOOTPRINT_INSTANCE_BLOCK = 0x2D
+BOARD_GEOMETRY_CLASS_CODE = 0x01
+BOARD_OUTLINE_SUBCLASS_CODE = 0xEA
+_BLIND_VIA_NAME_RE = re.compile(
+    r"^V(?P<start>[0-9T])(?P<end>[0-9T])S-(?P<drill>\d+)-(?P<pad>\d+)",
+    re.IGNORECASE,
+)
+_POB_NAME_RE = re.compile(
+    r"POB(?P<barrel_w>[0-9D]+)X(?P<barrel_h>[0-9D]+)"
+    r"HOB(?P<pad_w>[0-9D]+)X(?P<pad_h>[0-9D]+)",
+    re.IGNORECASE,
+)
+_POB_OFFSET_RE = re.compile(r"_OS(?P<x>[0-9D]+)X(?P<y>[0-9D]+)", re.IGNORECASE)
 
 
 @dataclass(slots=True)
@@ -78,6 +91,7 @@ class _PadRecord:
     side: str | None
     component_location: SemanticPoint | None
     component_rotation: float | None
+    via_position: SemanticPoint | None
 
 
 @dataclass(slots=True)
@@ -100,7 +114,7 @@ def from_brd(payload: BRDLayout, *, build_connectivity: bool = True) -> Semantic
 
     nets, net_ids_by_assignment = _semantic_nets(payload)
     shapes: list[SemanticShape] = []
-    shape_ids_by_key: dict[tuple[str, tuple[float, ...]], str] = {}
+    shape_ids_by_key: dict[tuple[str, tuple[object, ...]], str] = {}
 
     via_templates, via_template_ids_by_padstack = _semantic_via_templates(
         payload,
@@ -159,6 +173,7 @@ def from_brd(payload: BRDLayout, *, build_connectivity: bool = True) -> Semantic
         pads=pads,
         vias=vias,
         primitives=primitives,
+        board_outline=_board_outline(payload),
         diagnostics=diagnostics,
     )
     if build_connectivity:
@@ -334,22 +349,32 @@ def _semantic_via_templates(
     payload: BRDLayout,
     layer_names: list[str],
     shapes: list[SemanticShape],
-    shape_ids_by_key: dict[tuple[str, tuple[float, ...]], str],
+    shape_ids_by_key: dict[tuple[str, tuple[object, ...]], str],
 ) -> tuple[list[SemanticViaTemplate], dict[int, str]]:
     via_templates: list[SemanticViaTemplate] = []
     ids_by_padstack: dict[int, str] = {}
     for index, padstack in enumerate(_ordered_padstacks_for_templates(payload)):
-        diameter = _raw_length_to_semantic(payload, padstack.drill_size_raw)
-        if diameter is None or diameter <= 0:
-            diameter = DEFAULT_PAD_DIAMETER_MM
-        barrel_shape_id = _shape_id(
+        layer_span = _padstack_layer_names(padstack, layer_names)
+        barrel_diameter, pad_diameter = _via_name_diameters(padstack.name)
+        if barrel_diameter is None:
+            barrel_diameter = _raw_length_to_semantic(payload, padstack.drill_size_raw)
+        if barrel_diameter is None or barrel_diameter <= 0:
+            barrel_diameter = DEFAULT_PAD_DIAMETER_MM
+        barrel_shape_id = _padstack_barrel_shape_id(
+            payload,
+            padstack,
+            index,
+            barrel_diameter,
             shapes,
             shape_ids_by_key,
-            kind="circle",
-            auroradb_type="Circle",
-            values=[0.0, 0.0, diameter],
-            source_path=f"padstacks[{index}].drill_size_raw",
-            source_key=padstack.key,
+        )
+        pad_shape_id = _padstack_layer_pad_shape_id(
+            padstack,
+            index,
+            pad_diameter or barrel_diameter,
+            barrel_shape_id,
+            shapes,
+            shape_ids_by_key,
         )
         template_id = semantic_id("via_template", padstack.name or padstack.key, index)
         via_templates.append(
@@ -360,9 +385,9 @@ def _semantic_via_templates(
                 layer_pads=[
                     SemanticViaTemplateLayer(
                         layer_name=layer_name,
-                        pad_shape_id=barrel_shape_id,
+                        pad_shape_id=pad_shape_id,
                     )
-                    for layer_name in _padstack_layer_names(padstack, layer_names)
+                    for layer_name in layer_span
                 ],
                 geometry=SemanticViaTemplateGeometry(
                     source="brd_padstack_drill",
@@ -396,9 +421,209 @@ def _ordered_padstacks_for_templates(payload: BRDLayout):
 def _padstack_layer_names(padstack, layer_names: list[str]) -> list[str]:
     if not layer_names:
         return []
+    named_span = _padstack_name_layer_span(getattr(padstack, "name", None), layer_names)
+    if named_span:
+        return named_span
     if getattr(padstack, "layer_count", 0) > 1:
         return list(layer_names)
     return [layer_names[0]]
+
+
+def _padstack_name_layer_span(
+    padstack_name: str | None, layer_names: list[str]
+) -> list[str]:
+    if not padstack_name:
+        return []
+    match = _BLIND_VIA_NAME_RE.match(padstack_name)
+    if match is None:
+        return []
+    start = _via_layer_index(match.group("start"), layer_names)
+    end = _via_layer_index(match.group("end"), layer_names)
+    if start is None or end is None:
+        return []
+    low, high = sorted((start, end))
+    return layer_names[low : high + 1]
+
+
+def _via_layer_index(value: str, layer_names: list[str]) -> int | None:
+    token = value.upper()
+    if token == "T":
+        return len(layer_names) - 1
+    try:
+        number = int(token)
+    except ValueError:
+        return None
+    if number <= 0:
+        return None
+    index = number - 1
+    if index >= len(layer_names):
+        return None
+    return index
+
+
+def _via_name_diameters(padstack_name: str | None) -> tuple[float | None, float | None]:
+    if not padstack_name:
+        return None, None
+    match = _BLIND_VIA_NAME_RE.match(padstack_name)
+    if match is None:
+        return None, None
+    drill = _via_name_dimension(match.group("drill"))
+    pad = _via_name_dimension(match.group("pad"))
+    return drill, pad
+
+
+def _via_name_dimension(value: str) -> float | None:
+    try:
+        number = int(value)
+    except ValueError:
+        return None
+    divisor = 100.0 if len(value) > 1 else 10.0
+    return number / divisor
+
+
+def _padstack_barrel_shape_id(
+    payload: BRDLayout,
+    padstack,
+    padstack_index: int,
+    fallback_diameter: float,
+    shapes: list[SemanticShape],
+    shape_ids_by_key: dict[tuple[str, tuple[object, ...]], str],
+) -> str:
+    pob = _pob_dimensions(padstack.name)
+    if pob is not None:
+        barrel_width, barrel_height, _, _ = pob
+        return _rect_cut_corner_shape_id(
+            shapes,
+            shape_ids_by_key,
+            width=barrel_width,
+            height=barrel_height,
+            source_path=f"padstacks[{padstack_index}].name",
+            source_key=padstack.key,
+        )
+    diameter = _raw_length_to_semantic(payload, padstack.drill_size_raw)
+    if diameter is None or diameter <= 0:
+        diameter = fallback_diameter
+    return _shape_id(
+        shapes,
+        shape_ids_by_key,
+        kind="circle",
+        auroradb_type="Circle",
+        values=[0.0, 0.0, diameter],
+        source_path=f"padstacks[{padstack_index}].drill_size_raw",
+        source_key=padstack.key,
+    )
+
+
+def _padstack_layer_pad_shape_id(
+    padstack,
+    padstack_index: int,
+    fallback_diameter: float,
+    barrel_shape_id: str,
+    shapes: list[SemanticShape],
+    shape_ids_by_key: dict[tuple[str, tuple[object, ...]], str],
+) -> str:
+    pob = _pob_dimensions(padstack.name)
+    if pob is not None:
+        _, _, pad_width, pad_height = pob
+        return _rect_cut_corner_shape_id(
+            shapes,
+            shape_ids_by_key,
+            width=pad_width,
+            height=pad_height,
+            source_path=f"padstacks[{padstack_index}].name",
+            source_key=padstack.key,
+        )
+    if fallback_diameter <= 0:
+        return barrel_shape_id
+    return _shape_id(
+        shapes,
+        shape_ids_by_key,
+        kind="circle",
+        auroradb_type="Circle",
+        values=[0.0, 0.0, fallback_diameter],
+        source_path=f"padstacks[{padstack_index}].name",
+        source_key=padstack.key,
+    )
+
+
+def _rect_cut_corner_shape_id(
+    shapes: list[SemanticShape],
+    shape_ids_by_key: dict[tuple[str, tuple[object, ...]], str],
+    *,
+    width: float,
+    height: float,
+    source_path: str,
+    source_key: object,
+) -> str:
+    radius = min(abs(width), abs(height)) / 2.0
+    return _shape_id(
+        shapes,
+        shape_ids_by_key,
+        kind="rounded_rectangle",
+        auroradb_type="RectCutCorner",
+        values=[0.0, 0.0, width, height, radius, "N", "Y", "Y", "Y", "Y"],
+        source_path=source_path,
+        source_key=source_key,
+    )
+
+
+def _pob_dimensions(
+    padstack_name: str | None,
+) -> tuple[float, float, float, float] | None:
+    if not padstack_name:
+        return None
+    match = _POB_NAME_RE.search(padstack_name)
+    if match is None:
+        return None
+    values = [
+        _allegro_decimal(match.group(name))
+        for name in ("barrel_w", "barrel_h", "pad_w", "pad_h")
+    ]
+    if any(value is None or value <= 0 for value in values):
+        return None
+    return tuple(float(value) for value in values)  # type: ignore[return-value]
+
+
+def _allegro_decimal(value: str | None) -> float | None:
+    if not value:
+        return None
+    text = value.upper().replace("D", ".")
+    try:
+        return float(text)
+    except ValueError:
+        return None
+
+
+def _padstack_via_position(
+    padstack_name: str | None,
+    pad_definition: BRDPadDefinition | None,
+    copper_center: SemanticPoint,
+) -> SemanticPoint | None:
+    if padstack_name is None or pad_definition is None:
+        return None
+    offset = _pob_offset(padstack_name)
+    if offset is None:
+        return None
+    offset_x, offset_y = offset
+    if offset_x == 0 and offset_y == 0:
+        return None
+    angle = radians(float(pad_definition.rotation_mdeg or 0) / 1000.0 - 90.0)
+    dx = offset_x * cos(angle) - offset_y * sin(angle)
+    dy = offset_x * sin(angle) + offset_y * cos(angle)
+    return SemanticPoint(x=copper_center.x + dx, y=copper_center.y + dy)
+
+
+def _pob_offset(padstack_name: str | None) -> tuple[float, float] | None:
+    if not padstack_name:
+        return None
+    match = _POB_OFFSET_RE.search(padstack_name)
+    if match is None:
+        return None
+    offset_x = _allegro_decimal(match.group("x"))
+    offset_y = _allegro_decimal(match.group("y"))
+    if offset_x is None or offset_y is None:
+        return None
+    return offset_x, offset_y
 
 
 def _placed_pad_records(
@@ -411,7 +636,7 @@ def _placed_pad_records(
     pad_definitions_by_key: dict[int, BRDPadDefinition],
     padstack_names_by_key: dict[int, str],
     shapes: list[SemanticShape],
-    shape_ids_by_key: dict[tuple[str, tuple[float, ...]], str],
+    shape_ids_by_key: dict[tuple[str, tuple[object, ...]], str],
 ) -> list[_PadRecord]:
     if top_layer is None:
         return []
@@ -461,6 +686,11 @@ def _placed_pad_records(
             if pad_definition
             else None
         )
+        via_position = _padstack_via_position(
+            padstack_definition,
+            pad_definition,
+            center,
+        )
         footprint_id = semantic_id("footprint", footprint_name)
         records.append(
             _PadRecord(
@@ -480,6 +710,7 @@ def _placed_pad_records(
                 side=(component_info.side if component_info else None) or "top",
                 component_location=component_info.location if component_info else None,
                 component_rotation=component_info.rotation if component_info else None,
+                via_position=via_position,
             )
         )
     return records
@@ -593,6 +824,9 @@ def _component_pin_pad_records(
                     geometry=SemanticPadGeometry(
                         shape_id=record.shape_id,
                         source="brd_placed_pad_bbox",
+                        via_position=record.via_position.model_dump(mode="json")
+                        if record.via_position is not None
+                        else None,
                     ),
                     source=source_ref("brd", "placed_pads", record.pad.key),
                 )
@@ -630,6 +864,7 @@ def _semantic_vias(
     vias: list[SemanticVia] = []
     if not layer_names:
         return vias
+    padstacks_by_key = {padstack.key: padstack for padstack in payload.padstacks or []}
     for index, via in enumerate(payload.vias or []):
         x = _raw_coord_to_semantic(payload, via.x_raw)
         y = _raw_coord_to_semantic(payload, via.y_raw)
@@ -637,13 +872,16 @@ def _semantic_vias(
             continue
         template_id = via_template_ids_by_padstack.get(via.padstack)
         net_id = net_ids_by_assignment.get(via.net_assignment)
+        padstack = padstacks_by_key.get(via.padstack)
         vias.append(
             SemanticVia(
                 id=semantic_id("via", via.key, index),
                 name=str(via.key),
                 template_id=template_id,
                 net_id=net_id,
-                layer_names=layer_names,
+                layer_names=_padstack_layer_names(padstack, layer_names)
+                if padstack is not None
+                else layer_names,
                 position=SemanticPoint(x=x, y=y),
                 geometry=SemanticViaGeometry(rotation=0),
                 source=source_ref("brd", f"vias[{index}]", via.key),
@@ -773,6 +1011,112 @@ def _semantic_primitives(
             primitives.append(primitive)
 
     return primitives
+
+
+def _board_outline(payload: BRDLayout):
+    segments_by_key = {segment.key: segment for segment in payload.segments or []}
+    candidates = []
+    for shape_index, shape in enumerate(payload.shapes or []):
+        layer = shape.layer
+        if layer.class_code != BOARD_GEOMETRY_CLASS_CODE:
+            continue
+        arcs, values = _outline_chain_values(
+            payload, shape.first_segment, shape.key, segments_by_key
+        )
+        if len(values) < 3:
+            continue
+        bbox = _outline_values_bbox(values)
+        if bbox is None:
+            continue
+        x_min, y_min, x_max, y_max = bbox
+        area = abs((x_max - x_min) * (y_max - y_min))
+        is_named_outline = (layer.subclass_name or "").casefold() == "bgeom_outline"
+        is_outline_code = layer.subclass_code == BOARD_OUTLINE_SUBCLASS_CODE
+        candidates.append(
+            (
+                1 if is_named_outline or is_outline_code else 0,
+                area,
+                len(arcs),
+                -shape_index,
+                values,
+            )
+        )
+    if not candidates:
+        return {}
+    _, _, path_count, _, values = max(candidates)
+    return {
+        "kind": "polygon",
+        "auroradb_type": "Polygon",
+        "source": "brd_board_geometry_outline",
+        "path_count": path_count,
+        "values": [len(values), *values, "Y", "Y"],
+    }
+
+
+def _outline_chain_values(
+    payload: BRDLayout,
+    first_segment: int,
+    tail_key: int,
+    segments_by_key: dict[int, BRDSegment],
+) -> tuple[list[BRDSegment], list[str]]:
+    segments = list(_walk_segment_chain(first_segment, tail_key, segments_by_key))
+    if not segments:
+        return [], []
+    first_start = _raw_point_to_semantic(payload, segments[0].start_raw)
+    if first_start is None:
+        return [], []
+    values = [_outline_point_value(first_start)]
+    for index, segment in enumerate(segments):
+        end = _raw_point_to_semantic(payload, segment.end_raw)
+        if end is None:
+            continue
+        closing = index == len(segments) - 1 and _same_point_list(end, first_start)
+        if segment.kind == "arc":
+            center = _raw_point_to_semantic(payload, segment.center_raw)
+            if center is None:
+                continue
+            values.append(
+                _outline_arc_value(
+                    end,
+                    center,
+                    "N" if segment.clockwise else "Y",
+                )
+            )
+        elif not closing:
+            values.append(_outline_point_value(end))
+    return segments, values
+
+
+def _outline_values_bbox(values: list[str]) -> tuple[float, float, float, float] | None:
+    xs: list[float] = []
+    ys: list[float] = []
+    for value in values:
+        parts = value.strip("()").split(",")
+        if len(parts) < 2:
+            continue
+        try:
+            xs.append(float(parts[0]))
+            ys.append(float(parts[1]))
+            if len(parts) >= 4:
+                xs.append(float(parts[2]))
+                ys.append(float(parts[3]))
+        except ValueError:
+            continue
+    if not xs or not ys:
+        return None
+    return min(xs), min(ys), max(xs), max(ys)
+
+
+def _outline_point_value(point: list[float]) -> str:
+    return f"({point[0]},{point[1]})"
+
+
+def _outline_arc_value(end: list[float], center: list[float], direction: str) -> str:
+    return f"({end[0]},{end[1]},{center[0]},{center[1]},{direction})"
+
+
+def _same_point_list(left: list[float], right: list[float]) -> bool:
+    return abs(left[0] - right[0]) <= 1e-9 and abs(left[1] - right[1]) <= 1e-9
 
 
 def _segment_primitive(
@@ -1151,15 +1495,15 @@ def _is_footprint_instance_block(block: BRDBlockSummary) -> bool:
 
 def _shape_id(
     shapes: list[SemanticShape],
-    shape_ids_by_key: dict[tuple[str, tuple[float, ...]], str],
+    shape_ids_by_key: dict[tuple[str, tuple[object, ...]], str],
     *,
     kind: str,
     auroradb_type: str,
-    values: list[float],
+    values: list[float | str],
     source_path: str,
     source_key: object,
 ) -> str:
-    key = (auroradb_type, tuple(round(float(value), 9) for value in values))
+    key = (auroradb_type, tuple(_shape_key_value(value) for value in values))
     existing = shape_ids_by_key.get(key)
     if existing is not None:
         return existing
@@ -1175,6 +1519,12 @@ def _shape_id(
         )
     )
     return shape_id
+
+
+def _shape_key_value(value: float | str) -> object:
+    if isinstance(value, str):
+        return value
+    return round(float(value), 9)
 
 
 def _bbox_points(payload: BRDLayout, coords_raw: list[int]) -> tuple[float, ...] | None:

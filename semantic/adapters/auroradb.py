@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import math
+
 from aurora_translator.sources.auroradb.models import (
     AuroraDBModel,
+    AuroraLocationModel,
     AuroraPartModel,
     AuroraPartPadModel,
+    AuroraShapeSymbolModel,
+    AuroraStoredNodeModel,
 )
 from aurora_translator.semantic.adapters.utils import (
     point_from_pair,
@@ -25,6 +30,7 @@ from aurora_translator.semantic.models import (
     SemanticPad,
     SemanticPin,
     SemanticPrimitive,
+    SemanticShape,
     SemanticSummary,
     SemanticVia,
 )
@@ -44,6 +50,9 @@ def from_auroradb(payload: AuroraDBModel) -> SemanticBoard:
     pads: list[SemanticPad] = []
     vias: list[SemanticVia] = []
     primitives: list[SemanticPrimitive] = []
+    shapes: list[SemanticShape] = []
+    shape_ids_by_symbol_id: dict[str, str] = {}
+    shape_nodes_by_symbol_id: dict[str, AuroraStoredNodeModel] = {}
 
     parts = payload.parts.parts if payload.parts else []
     parts_by_name = {part.info.name: part for part in parts if part.info.name}
@@ -129,6 +138,16 @@ def from_auroradb(payload: AuroraDBModel) -> SemanticBoard:
         )
 
     if payload.layout is not None:
+        for shape_index, shape in enumerate(payload.layout.shapes):
+            semantic_shape = _semantic_shape_from_aurora(shape, shape_index)
+            if semantic_shape is None:
+                continue
+            shapes.append(semantic_shape)
+            shape_ids_by_symbol_id[shape.id] = semantic_shape.id
+            if shape.geometry is not None:
+                shape_nodes_by_symbol_id[shape.id] = shape.geometry
+
+    if payload.layout is not None:
         for net_index, net in enumerate(payload.layout.nets):
             net_id = semantic_id("net", net.name, net_index)
             nets_by_id[net_id] = SemanticNet(
@@ -180,6 +199,15 @@ def from_auroradb(payload: AuroraDBModel) -> SemanticBoard:
         for net_geometry_index, net_geometry in enumerate(layer.net_geometries):
             net_id = semantic_id("net", net_geometry.net_name)
             for geometry_index, geometry in enumerate(net_geometry.geometries):
+                primitive_kind, primitive_geometry = _net_geometry_payload(
+                    geometry.symbol_id,
+                    geometry.location,
+                    geometry.geometry,
+                    shape_ids_by_symbol_id,
+                    shape_nodes_by_symbol_id,
+                )
+                if primitive_geometry is None:
+                    continue
                 primitive_id = semantic_id(
                     "primitive",
                     f"{layer.name}:{net_geometry.net_name}:{geometry.symbol_id}",
@@ -188,15 +216,10 @@ def from_auroradb(payload: AuroraDBModel) -> SemanticBoard:
                 primitives.append(
                     SemanticPrimitive(
                         id=primitive_id,
-                        kind="net_geometry",
+                        kind=primitive_kind,
                         layer_name=layer.name,
                         net_id=net_id,
-                        geometry={
-                            "symbol_id": geometry.symbol_id,
-                            "location": geometry.location.model_dump(mode="json")
-                            if geometry.location
-                            else None,
-                        },
+                        geometry=primitive_geometry,
                         source=source_ref(
                             "auroradb",
                             f"layers[{layer_index}].net_geometries[{net_geometry_index}].geometries[{geometry_index}]",
@@ -238,12 +261,17 @@ def from_auroradb(payload: AuroraDBModel) -> SemanticBoard:
                     if footprint_symbol and pad_name
                     else None
                 )
+                resolved_layer_name = _resolved_net_pin_layer(
+                    pin,
+                    components_by_id.get(component_id or ""),
+                    template,
+                )
                 semantic_pin = SemanticPin(
                     id=pin_id,
                     name=pin.pin,
                     component_id=component_id,
                     net_id=net_id,
-                    layer_name=pin.metal_layer or pin.component_layer,
+                    layer_name=resolved_layer_name,
                     source=source_ref(
                         "auroradb",
                         f"layout.nets[{net_index}].pins[{pin_index}]",
@@ -268,9 +296,7 @@ def from_auroradb(payload: AuroraDBModel) -> SemanticBoard:
                     component_id=component_id,
                     pin_id=pin_id,
                     net_id=net_id,
-                    layer_name=pin.metal_layer
-                    or pin.component_layer
-                    or (template[1] if template else None),
+                    layer_name=resolved_layer_name,
                     padstack_definition=template[0].template_id if template else None,
                     geometry={
                         "source_pin_raw": list(pin.raw),
@@ -334,6 +360,7 @@ def from_auroradb(payload: AuroraDBModel) -> SemanticBoard:
         units=payload.layout.units if payload.layout else payload.summary.units,
         summary=SemanticSummary(),
         layers=layers,
+        shapes=shapes,
         nets=list(nets_by_id.values()),
         components=list(components_by_id.values()),
         footprints=list(footprints_by_id.values()),
@@ -350,6 +377,340 @@ def from_auroradb(payload: AuroraDBModel) -> SemanticBoard:
         }
     )
     return board.with_computed_summary()
+
+
+def _semantic_shape_from_aurora(
+    shape: AuroraShapeSymbolModel, shape_index: int
+) -> SemanticShape | None:
+    if shape.geometry is None:
+        return None
+    values = _shape_values_from_node(shape.geometry)
+    if not values:
+        return None
+    auroradb_type = shape.geometry.name
+    return SemanticShape(
+        id=semantic_id("shape", shape.id, shape_index),
+        name=shape.name or shape.id,
+        kind=_semantic_shape_kind(auroradb_type),
+        auroradb_type=auroradb_type,
+        values=values,
+        source=source_ref("auroradb", f"layout.shapes[{shape_index}]", shape.id),
+    )
+
+
+def _shape_values_from_node(
+    node: AuroraStoredNodeModel,
+) -> list[str | float | int]:
+    if node.name.casefold() == "polygon":
+        return _polygon_values_from_node(node)
+    return list(node.values)
+
+
+def _semantic_shape_kind(auroradb_type: str | None) -> str:
+    text = (auroradb_type or "").replace("_", "").casefold()
+    if text == "circle":
+        return "circle"
+    if text in {"rectangle", "square"}:
+        return "rectangle"
+    if text in {"roundedrectangle", "oval"}:
+        return "rounded_rectangle"
+    if text == "rectcutcorner":
+        return "rect_cut_corner"
+    if text == "polygon":
+        return "polygon"
+    return text or "unknown"
+
+
+def _net_geometry_payload(
+    symbol_id: str | None,
+    location: AuroraLocationModel | None,
+    inline_geometry: AuroraStoredNodeModel | None,
+    shape_ids_by_symbol_id: dict[str, str],
+    shape_nodes_by_symbol_id: dict[str, AuroraStoredNodeModel],
+) -> tuple[str, dict[str, object] | None]:
+    shape_id = shape_ids_by_symbol_id.get(symbol_id or "")
+    geometry_node = inline_geometry or shape_nodes_by_symbol_id.get(symbol_id or "")
+    location_payload = location.model_dump(mode="json") if location else None
+
+    if geometry_node is not None and geometry_node.name.casefold() in {
+        "polygon",
+        "polygonhole",
+    }:
+        raw_points = _polygon_points_from_node(geometry_node)
+        if len(raw_points) < 3:
+            return "polygon", None
+        transformed_points = _transform_polygon_points(raw_points, location)
+        _, solid = _polygon_flags_from_node(geometry_node)
+        payload: dict[str, object] = {
+            "symbol_id": symbol_id,
+            "raw_points": transformed_points,
+            "is_negative": solid is False,
+        }
+        voids = _polygon_voids_from_node(geometry_node, location)
+        if voids:
+            payload["voids"] = voids
+        if shape_id:
+            payload["shape_id"] = shape_id
+        if location_payload:
+            payload["location"] = location_payload
+        return "polygon", payload
+
+    if geometry_node is not None and geometry_node.name.casefold() == "line":
+        points = _line_points_from_node(geometry_node)
+        if points is None:
+            return "trace", None
+        return (
+            "trace",
+            {
+                "symbol_id": symbol_id,
+                "center_line": points,
+                "width": _shape_trace_width(shape_nodes_by_symbol_id.get(symbol_id or "")),
+            },
+        )
+
+    if geometry_node is not None and geometry_node.name.casefold() == "larc":
+        arc = _arc_geometry_from_node(geometry_node)
+        if arc is None:
+            return "arc", None
+        arc["symbol_id"] = symbol_id
+        arc["width"] = _shape_trace_width(shape_nodes_by_symbol_id.get(symbol_id or ""))
+        return "arc", arc
+
+    if shape_id and location is not None:
+        return (
+            "net_geometry",
+            {
+                "symbol_id": symbol_id,
+                "shape_id": shape_id,
+                "location": location_payload,
+            },
+        )
+
+    return "net_geometry", None
+
+
+def _polygon_values_from_node(
+    node: AuroraStoredNodeModel,
+) -> list[str | float | int]:
+    points = _polygon_points_from_node(node)
+    if len(points) < 3:
+        return []
+    ccw, solid = _polygon_flags_from_node(node)
+    return [
+        len(points),
+        *[_polygon_point_value(x, y) for x, y in points],
+        "Y" if ccw else "N",
+        "Y" if solid else "N",
+    ]
+
+
+def _polygon_points_from_node(node: AuroraStoredNodeModel) -> list[tuple[float, float]]:
+    points: list[tuple[float, float]] = []
+    arc_hints: list[tuple[tuple[float, float], tuple[float, float]]] = []
+    for child in node.children:
+        name = child.name.casefold()
+        if name == "pnt" and len(child.values) >= 2:
+            try:
+                points.append((float(child.values[0]), float(child.values[1])))
+            except ValueError:
+                continue
+        elif name == "parc" and len(child.values) >= 4:
+            try:
+                endpoint = (float(child.values[0]), float(child.values[1]))
+                center = (float(child.values[2]), float(child.values[3]))
+            except ValueError:
+                continue
+            arc_hints.append((endpoint, center))
+            if not points or not _same_point(points[-1], endpoint):
+                points.append(endpoint)
+    if len(points) >= 2 and _same_point(points[0], points[-1]):
+        points.pop()
+    if len(points) < 3:
+        circular_points = _arc_only_polygon_points(points, arc_hints)
+        if circular_points:
+            return circular_points
+    return points
+
+
+def _arc_only_polygon_points(
+    points: list[tuple[float, float]],
+    arc_hints: list[tuple[tuple[float, float], tuple[float, float]]],
+) -> list[tuple[float, float]]:
+    if not arc_hints:
+        return []
+    start = points[0] if points else arc_hints[0][0]
+    endpoint, center = arc_hints[0]
+    if not _same_point(start, endpoint):
+        return []
+    radius = math.hypot(start[0] - center[0], start[1] - center[1])
+    if radius <= 0:
+        return []
+    return [
+        (
+            center[0] + math.cos((2.0 * math.pi * index) / 16.0) * radius,
+            center[1] + math.sin((2.0 * math.pi * index) / 16.0) * radius,
+        )
+        for index in range(16)
+    ]
+
+
+def _polygon_flags_from_node(node: AuroraStoredNodeModel) -> tuple[bool, bool]:
+    ccw = True
+    solid = True
+    for child in node.children:
+        name = child.name.casefold()
+        value = child.values[0] if child.values else None
+        if name == "ccw":
+            ccw = _aurora_bool(value, default=True)
+        elif name == "solid":
+            solid = _aurora_bool(value, default=True)
+    return ccw, solid
+
+
+def _transform_polygon_points(
+    points: list[tuple[float, float]], location: AuroraLocationModel | None
+) -> list[list[float]]:
+    if location is None:
+        return [[x, y] for x, y in points]
+
+    origin_x = location.x or 0.0
+    origin_y = location.y or 0.0
+    scale = location.scale if location.scale not in {None, 0} else 1.0
+    angle = location.rotation or 0.0
+    if location.ccw is False:
+        angle = -angle
+    cos_angle = math.cos(angle)
+    sin_angle = math.sin(angle)
+
+    transformed: list[list[float]] = []
+    for x, y in points:
+        local_x = -x if location.flip_x else x
+        local_y = -y if location.flip_y else y
+        local_x *= scale
+        local_y *= scale
+        transformed.append(
+            [
+                origin_x + local_x * cos_angle - local_y * sin_angle,
+                origin_y + local_x * sin_angle + local_y * cos_angle,
+            ]
+        )
+    return transformed
+
+
+def _line_points_from_node(node: AuroraStoredNodeModel) -> list[list[float]] | None:
+    values = _float_values(node.values)
+    if len(values) < 4:
+        return None
+    return [[values[0], values[1]], [values[2], values[3]]]
+
+
+def _arc_geometry_from_node(node: AuroraStoredNodeModel) -> dict[str, object] | None:
+    values = _float_values(node.values[:6])
+    if len(values) < 6:
+        return None
+    is_ccw = _aurora_bool(node.values[6] if len(node.values) > 6 else None, default=True)
+    return {
+        "start": [values[0], values[1]],
+        "end": [values[2], values[3]],
+        "center": [values[4], values[5]],
+        "is_ccw": is_ccw,
+    }
+
+
+def _polygon_voids_from_node(
+    node: AuroraStoredNodeModel, location: AuroraLocationModel | None
+) -> list[dict[str, object]]:
+    voids: list[dict[str, object]] = []
+    for child in node.children:
+        if child.name.casefold() != "holes":
+            continue
+        for hole in child.children:
+            if hole.name.casefold() not in {"polygon", "polygonhole"}:
+                continue
+            points = _polygon_points_from_node(hole)
+            if len(points) < 3:
+                continue
+            voids.append(
+                {"raw_points": _transform_polygon_points(points, location)}
+            )
+    return voids
+
+
+def _shape_trace_width(node: AuroraStoredNodeModel | None) -> float | None:
+    if node is None or node.name.casefold() != "circle" or len(node.values) < 3:
+        return None
+    try:
+        return float(node.values[2])
+    except ValueError:
+        return None
+
+
+def _float_values(values: list[str]) -> list[float]:
+    result: list[float] = []
+    for value in values:
+        try:
+            result.append(float(value))
+        except ValueError:
+            break
+    return result
+
+
+def _resolved_net_pin_layer(
+    pin,
+    component: SemanticComponent | None,
+    template: tuple[AuroraPartPadModel, str | None, str] | None,
+) -> str | None:
+    return (
+        _canonical_metal_layer_name(pin.metal_layer)
+        or _canonical_metal_layer_name(template[1] if template else None)
+        or _metal_layer_from_component_layer(pin.component_layer)
+        or (component.layer_name if component is not None else None)
+    )
+
+
+def _metal_layer_from_component_layer(layer_name: str | None) -> str | None:
+    if not layer_name:
+        return None
+    text = layer_name.strip()
+    upper = text.upper()
+    if upper.startswith("COMP_+_"):
+        return text[7:]
+    if upper.startswith("COMP_"):
+        value = text[5:]
+        if value.upper() == "BOT":
+            return "BOTTOM"
+        return _canonical_metal_layer_name(value)
+    return _canonical_metal_layer_name(text)
+
+
+def _canonical_metal_layer_name(layer_name: str | None) -> str | None:
+    if not layer_name:
+        return None
+    text = layer_name.strip()
+    folded = text.casefold()
+    if folded == "top":
+        return "TOP"
+    if folded in {"bot", "bottom"}:
+        return "BOTTOM"
+    return text
+
+
+def _polygon_point_value(x: float, y: float) -> str:
+    return f"({_shape_number(x)},{_shape_number(y)})"
+
+
+def _shape_number(value: float) -> str:
+    return f"{value:.12g}"
+
+
+def _same_point(left: tuple[float, float], right: tuple[float, float]) -> bool:
+    return abs(left[0] - right[0]) <= 1e-9 and abs(left[1] - right[1]) <= 1e-9
+
+
+def _aurora_bool(value: object | None, *, default: bool) -> bool:
+    if value is None:
+        return default
+    return str(value).strip().casefold() in {"1", "true", "yes", "y"}
 
 
 def _record_footprint_pad_template(

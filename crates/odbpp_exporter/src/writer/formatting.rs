@@ -2,14 +2,24 @@ use std::collections::HashSet;
 
 pub(super) fn odb_net_name(value: &str) -> String {
     let text = value.trim();
-    if text.eq_ignore_ascii_case("nonet")
-        || text.eq_ignore_ascii_case("no_net")
-        || text.eq_ignore_ascii_case("$none$")
-        || text.eq_ignore_ascii_case("none")
-    {
-        return "$NONE$".to_string();
+    if text.is_empty() {
+        "UNNAMED_NET".to_string()
+    } else {
+        text.to_string()
     }
-    legal_net_name(text)
+}
+
+pub(super) fn odb_token(value: &str) -> String {
+    let cleaned = value.replace(['"', '\''], "_");
+    if cleaned.is_empty()
+        || cleaned
+            .chars()
+            .any(|ch| ch.is_whitespace() || matches!(ch, ';' | ',' | '#'))
+    {
+        format!("\"{cleaned}\"")
+    } else {
+        cleaned
+    }
 }
 
 pub(super) fn feature_id(id: &str, raw_id: Option<&str>) -> Option<String> {
@@ -79,10 +89,6 @@ pub(super) fn legal_component_name(value: &str) -> String {
     } else {
         result
     }
-}
-
-fn legal_net_name(value: &str) -> String {
-    legal_scalar(value)
 }
 
 pub(super) fn unique_name<'a>(base: String, existing: impl Iterator<Item = &'a str>) -> String {
