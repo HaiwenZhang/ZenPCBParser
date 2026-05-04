@@ -1,0 +1,621 @@
+<a id="top"></a>
+# Aurora Translator 项目架构 / Aurora Translator Project Architecture
+
+[中文](#zh) | [English](#en)
+
+<a id="zh"></a>
+## 中文
+
+[English](#en) | [返回顶部](#top)
+
+本文档说明 Aurora Translator 当前的项目级架构。现在项目以 `SemanticBoard` 为唯一统一中间模型，主叙事是：
+
+- `AEDB -> SemanticBoard -> AuroraDB / 其他目标`
+- `ODB++ -> SemanticBoard -> AuroraDB / 其他目标`
+- `AuroraDB -> SemanticBoard -> 其他目标`
+
+格式内部的字段细节仍以各自目录下的文档为准。
+
+## 设计目标
+
+Aurora Translator 的核心目标是把不同 PCB/封装相关数据源解析成稳定、可校验、可追踪版本的源格式对象，再统一进入 `SemanticBoard`，最后导出目标格式文件。JSON payload 继续保留，但默认作为调试、对拍和归档能力，而不是主流程依赖。
+
+当前架构遵循几个原则：
+
+- **源/语义/目标分层**：`sources/*` 只负责输入格式解析，`semantic/*` 只负责统一语义，`targets/*` 只负责目标格式导出。
+- **格式忠实优先**：每个输入格式先保留自己的高保真输出模型，例如 `AEDBLayout`、`AuroraDBModel`、`ODBLayout`。
+- **统一转换只走 `SemanticBoard`**：跨格式转换统一通过 `SemanticBoard` 提供，不做源格式之间的直接耦合导出。
+- **语义层独立**：semantic 模块消费格式对象或格式 JSON，生成统一 PCB 语义对象，不反向污染格式模型。
+- **schema 可生成**：机器可读 JSON schema 由模型生成或由模型定义维护，并跟随格式级 schema 版本。
+- **版本分层**：项目版本、格式解析器版本、格式 JSON schema 版本分开管理。
+- **重计算放底层**：对 ODB++ 这类文本/归档解析任务，底层使用 Rust 解析核心，并同时暴露 PyO3 native 模块和 CLI；Python 负责项目集成、模型校验、文档和 CLI 编排。
+- **AAF 只作为 AuroraDB target 的内部过渡格式**：它仍然支持 inspect/compile，但不再作为顶层架构的中心。
+
+## 总体结构
+
+```mermaid
+flowchart TD
+    cli["cli/main.py<br/>统一命令入口"]
+    convert["cli/convert.py<br/>推荐主流程"]
+    inspect["cli/inspect.py"]
+    dump["cli/dump.py"]
+    schema["cli/schema.py"]
+
+    sources["sources/*<br/>AEDB / AuroraDB / ODB++"]
+    semantic["semantic/*<br/>SemanticBoard + adapters + passes"]
+    targets["targets/auroradb/*<br/>AuroraDB 导出（AAF 可选）"]
+    rust["crates/odbpp_parser<br/>Rust ODB++ parser"]
+
+    cli --> convert
+    cli --> inspect
+    cli --> dump
+    cli --> schema
+    convert --> sources
+    inspect --> sources
+    dump --> sources
+    sources --> rust
+    sources --> semantic --> targets
+```
+
+## 包职责
+
+| 目录 | 职责 |
+| --- | --- |
+| `sources/aedb/` | AEDB 源解析、PyEDB 会话管理、extractor、schema 和格式级变更记录。 |
+| `sources/auroradb/` | AuroraDB 源读取、block/model、inspect/diff、schema 和格式级文档。 |
+| `sources/odbpp/` | ODB++ Python 集成层，优先调用 Rust native 模块，必要时回退到 CLI，校验 `ODBLayout` 并导出 schema/coverage。 |
+| `semantic/` | 统一 `SemanticBoard`、格式 adapter、连接图和语义诊断。 |
+| `targets/auroradb/` | `SemanticBoard -> AuroraDB` 导出链路；AAF 只作为内部中间层或显式导出产物；`exporter.py` 只做顶层编排，`plan.py` 保存导出索引，`direct.py` 保存 direct AuroraDB builder 状态，`layout.py` 保存 `layout.db` / `design.layout` 写出，`parts.py` 保存 `parts.db` / `design.part` 写出和 part/footprint plan，`geometry.py` 保存 shape / via / trace / polygon geometry 命令与 payload，`stackup.py` 保存 stackup planning/serialization，`formatting.py` 保存单位/数值/旋转格式化 helper，`names.py` 保存命名和 AAF quoting helper。 |
+| `pipeline/` | `source -> semantic -> target` 主流程编排。 |
+| `shared/` | 日志、性能统计、JSON 输出等共享工具。 |
+| `crates/odbpp_parser/` | Rust ODB++ 解析核心，同时提供 CLI 和 PyO3 native 模块，负责读取目录/归档和解析 ODB++ 文本记录；summary-only、显式 step 和默认 auto-step details 路径会跳过非必要明细文件。 |
+| `cli/` | 新的 `convert / inspect / dump / schema` 命令，以及保留的兼容命令。 |
+| `docs/` | 项目级文档和项目级变更记录。格式级文档放在各自的 `*/docs/` 下。 |
+
+项目根目录本身通过 `pyproject.toml` 映射为 `aurora_translator` 主包；当前代码统一按 `sources / semantic / targets / pipeline / shared` 组织。
+
+## CLI 路由
+
+顶层入口是 `aurora_translator.cli:main`，本地开发常用：
+
+```powershell
+uv run python .\main.py ...
+```
+
+当前路由规则：
+
+| 命令 | 入口 | 说明 |
+| --- | --- | --- |
+| `main.py <path-to-board.aedb>` | `cli/main.py` | 默认 AEDB 解析路径。 |
+| `main.py --print-schema` | `cli/main.py` | 输出 AEDB JSON schema。 |
+| `main.py convert ...` | `cli/convert.py` | 推荐主流程，直接走 `source -> SemanticBoard -> target`。 |
+| `main.py inspect ...` | `cli/inspect.py` | inspect source / AAF。 |
+| `main.py dump ...` | `cli/dump.py` | 显式导出 source JSON / semantic JSON。 |
+| `main.py schema ...` | `cli/schema.py` | 统一导出 schema。 |
+| `main.py auroradb ...` | `cli/auroradb.py` | 兼容 AuroraDB inspect/export/schema/diff/AAF 派生命令。 |
+| `main.py odbpp ...` | `cli/odbpp.py` | 兼容 ODB++ parse/schema/to-auroradb 命令。 |
+| `main.py semantic ...` | `cli/semantic.py` | 兼容 semantic from-json/from-source/source-to-aaf/source-to-auroradb/to-aaf/to-auroradb/schema 命令。 |
+
+## AEDB 解析链路
+
+AEDB 解析完全在 Python 侧完成，依赖 PyEDB 的本地 `.NET` 后端。
+
+```mermaid
+flowchart LR
+    source[".aedb 目录"]
+    parser["sources/aedb/parser.py<br/>parse_aedb()"]
+    session["sources/aedb/session.py<br/>open_aedb_session()"]
+    extractors["sources/aedb/extractors/*"]
+    model["sources/aedb/models.py<br/>AEDBLayout"]
+    json["AEDB JSON"]
+
+    source --> parser --> session --> extractors --> model --> json
+```
+
+关键点：
+
+- `sources/aedb/session.py` 负责打开和关闭 PyEDB 会话。
+- `sources/aedb/extractors/layout.py` 负责组织各领域 extractor 并构建 payload。
+- `sources/aedb/models.py` 是 AEDB JSON 结构的权威定义。
+- `AEDBLayout.model_json_schema()` 生成机器可读 schema。
+- `convert --from aedb --to auroradb` 在未请求 `--source-output` / `--semantic-output` 时会自动使用 `auroradb-minimal` 解析 profile，只保存 AuroraDB 导出必需字段和运行时私有几何缓存，减少 path / polygon 解析时间。
+- 显式导出 AEDB JSON 或 Semantic JSON 时始终使用完整 `full` profile；也可以用 `--aedb-parse-profile full` 强制关闭自动最小化解析。
+
+## AuroraDB 解析链路
+
+AuroraDB 解析保留两种视图：原始 block tree 和结构化 Pydantic 模型。AAF 是 AuroraDB 的输入子模块，不是独立顶层格式。
+
+```mermaid
+flowchart TD
+    db["AuroraDB 目录<br/>layout.db / parts.db / layers/*.lyr"]
+    aaf["AAF 命令<br/>design.layout / design.part"]
+    block["AuroraBlock / AuroraItem"]
+    package["AuroraDBPackage"]
+    model["AuroraDBModel"]
+    json["AuroraDB JSON"]
+    writer["AuroraDB 写回"]
+
+    db --> block --> package
+    aaf --> package
+    package --> model --> json
+    package --> writer
+```
+
+更细的 AuroraDB 内部架构见：[sources/auroradb/docs/architecture.md](../sources/auroradb/docs/architecture.md)。
+
+## ODB++ 解析链路
+
+ODB++ 解析采用 Rust + Python 的双层结构。
+
+当前 ODB++ 解析和语义映射优先参考官方 `ODB++Design Format Specification Release 8.1 Update 4, August 2024`（[PDF](https://odbplusplus.com//wp-content/uploads/sites/2/2024/08/odb_spec_user.pdf)，[Resources](https://odbplusplus.com/design/our-resources/)）。
+
+```mermaid
+flowchart LR
+    source["ODB++ 目录 / zip / tgz / tar"]
+    rust["crates/odbpp_parser<br/>Rust core"]
+    native["PyO3 native module"]
+    cli["Rust CLI"]
+    raw_json["CLI 输出 JSON"]
+    py["sources/odbpp/parser.py<br/>parse_odbpp()"]
+    model["sources/odbpp/models.py<br/>ODBLayout"]
+    source --> rust
+    rust --> native --> py --> model
+    rust --> cli --> raw_json --> py
+```
+
+Rust 侧负责：
+
+- 读取 ODB++ 目录、`.zip`、`.tgz`、`.tar.gz`、`.tar`。
+- 识别 product root。
+- 解析 `matrix/matrix`、`steps/<step>/profile`、layer `features`、layer `tools`、component records、EDA package definitions、net records。
+- 保留 ODB++ feature index、feature ID、surface contour、symbol library features、drill/rout tools、EDA package pin 和 package geometry、组件 pin、组件 PRP 属性，以及 EDA net 引用关系（`FID` feature 连接、`SNT TOP T/B` pin 连接和 FID 上的 pin 上下文）。
+- 通过共享解析核心向 CLI 输出 JSON payload，并向 PyO3 暴露 Python 可直接消费的对象结构。
+
+Python 侧负责：
+
+- 优先导入 `aurora_odbpp_native`，未安装时再查找或接收 `odbpp_parser.exe` 路径。
+- 注入 `PROJECT_VERSION`、`ODBPP_PARSER_VERSION`、`ODBPP_JSON_SCHEMA_VERSION`。
+- 校验 Rust 输出为 `ODBLayout`。
+- 写入 JSON，导出 Pydantic schema，并按需生成转换覆盖率报告。
+
+当前 Rust parser 已覆盖核心文件结构，以及 ODB++ 到 Semantic 转换所需的主要连接关系。ODB++ layer `attrlist`、package definitions 和 drill tools 已能支撑 stackup material/thickness 提取、component footprint 回退、完整 package body footprint 发布、via layer span 和 drill 顶层 metadata；Semantic adapter 还会根据匹配到的 signal-layer pad 和 negative pad antipad 细化 via template，并按 `I`/`H` contour polarity 拆分 surface polygon。ODB++ contour `OC` arc 现在会经 Semantic 导出为 AuroraDB `Parc` polygon 边；ODB++ 保留无网络名（如 `$NONE$`）会映射为 AuroraDB `NoNet` keyword；位于可布线层的正极性无 net trace/arc/polygon primitive 会提升为 `NoNet` 几何。非布线绘图 feature 仍只保留在 coverage 中。超出直接 via antipad 匹配的更复杂 negative/void 组合、thermal 约束、soldermask/paste 语义和完整 material library 重建仍属于后续增量工作。
+
+## Semantic 语义链路
+
+Semantic 层既可以消费已经导出的格式 JSON，也可以直接消费内存中的格式对象，并生成统一语义对象：
+
+```mermaid
+flowchart LR
+    source["AEDB / AuroraDB / ODB++ JSON"]
+    adapter["semantic.adapters"]
+    model["semantic/models.py<br/>SemanticBoard"]
+    pass["semantic/passes.py<br/>connectivity + diagnostics"]
+    json["Semantic JSON"]
+
+    source --> adapter --> model --> pass --> json
+```
+
+当前 semantic 模型包含 layer、material、shape、via template、net、component、footprint、pin、pad、via、primitive、board outline/profile geometry、connectivity 和 diagnostics。footprint、via template、pad、via、primitive 和 board outline 的 `geometry` 已收敛为 typed hint model，并保留 `extra` escape hatch 来承载源格式 metadata；下游仍通过 `.get()` 读取声明字段或兼容 metadata。每个对象都有 `SourceRef`，可以追踪回源格式字段。语义层本身只保留统一模型和 adapter/pass；真正的 Aurora/AAF / AuroraDB 目标导出实现已经收敛到 `targets/auroradb/`。该导出链默认会把统一模型中的叠层、材料、shape、via template、component、pin、带 net trace、带 net arc、带 net polygon、board outline 和 footprint body 语义直接写成 AuroraDB 输出目录中的 `layout.db`、`parts.db`、`layers/`，并保留 `stackup.dat`、`stackup.json`；只有显式要求时才额外保留 `aaf/design.layout`、`aaf/design.part`。其中 signal/plane layer 会进入 AuroraDB metal layer 结构，dielectric layer 会进入 stackup 文件。对于来自 AEDB 的语义 payload，当原始 AEDB component transform 不能保留规范化 footprint 朝向时，Aurora/AAF exporter 还会基于 pad 拓扑反推 component placement rotation，并按需拆分 part/footprint variant。
+
+更细的 semantic 内部架构见：[semantic/docs/architecture.md](../semantic/docs/architecture.md)。
+
+## JSON Schema 与文档
+
+| 格式 | schema | 双语字段说明 | 变更记录 |
+| --- | --- | --- | --- |
+| AEDB | `sources/aedb/docs/aedb_schema.json` | `sources/aedb/docs/aedb_json_schema.md` | `sources/aedb/docs/CHANGELOG.md`、`sources/aedb/docs/SCHEMA_CHANGELOG.md` |
+| AuroraDB | `sources/auroradb/docs/auroradb_schema.json` | `sources/auroradb/docs/auroradb_json_schema.md` | `sources/auroradb/docs/CHANGELOG.md`、`sources/auroradb/docs/SCHEMA_CHANGELOG.md` |
+| ODB++ | `sources/odbpp/docs/odbpp_schema.json` | `sources/odbpp/docs/odbpp_json_schema.md` | `sources/odbpp/docs/CHANGELOG.md`、`sources/odbpp/docs/SCHEMA_CHANGELOG.md` |
+| Semantic | `semantic/docs/semantic_schema.json` | `semantic/docs/semantic_json_schema.md` | `semantic/docs/CHANGELOG.md`、`semantic/docs/SCHEMA_CHANGELOG.md` |
+
+常用 schema 生成命令：
+
+```powershell
+uv run python .\main.py --schema-output .\sources\aedb\docs\aedb_schema.json
+uv run python .\main.py auroradb schema -o .\sources\auroradb\docs\auroradb_schema.json
+uv run python .\main.py odbpp schema -o .\sources\odbpp\docs\odbpp_schema.json
+uv run python .\main.py semantic schema -o .\semantic\docs\semantic_schema.json
+```
+
+## 版本管理
+
+版本分三层：
+
+| 层级 | 常量 | 作用 |
+| --- | --- | --- |
+| 项目版本 | `version.PROJECT_VERSION` | 表示整个 Aurora Translator 的发布版本。 |
+| 格式解析器版本 | `AEDB_PARSER_VERSION` / `AURORADB_PARSER_VERSION` / `ODBPP_PARSER_VERSION` | 表示某个格式解析逻辑、性能或集成方式的版本。 |
+| 格式 JSON schema 版本 | `AEDB_JSON_SCHEMA_VERSION` / `AURORADB_JSON_SCHEMA_VERSION` / `ODBPP_JSON_SCHEMA_VERSION` | 表示某个格式 JSON 输出契约的版本。 |
+| Semantic 版本 | `SEMANTIC_PARSER_VERSION` / `SEMANTIC_JSON_SCHEMA_VERSION` | 表示语义转换逻辑和 semantic JSON 输出契约的版本。 |
+
+JSON payload 中统一输出：
+
+```json
+{
+  "metadata": {
+    "project_version": "...",
+    "parser_version": "...",
+    "output_schema_version": "..."
+  }
+}
+```
+
+变更原则：
+
+- 只改实现、不改输出字段：更新对应格式的 parser version。
+- 改 JSON 字段、字段含义或结构：更新对应格式的 JSON schema version。
+- 项目级发布或整合格式级变更：更新 `PROJECT_VERSION` 和 `docs/CHANGELOG.md`。
+
+当前版本：
+
+| 项 | 版本 |
+| --- | --- |
+| Project | `1.0.42` |
+| AEDB parser | `0.4.56` |
+| AEDB JSON schema | `0.5.0` |
+| AuroraDB parser | `0.2.13` |
+| AuroraDB JSON schema | `0.2.0` |
+| ODB++ parser | `0.6.3` |
+| ODB++ JSON schema | `0.6.0` |
+| Semantic parser | `0.7.1` |
+| Semantic JSON schema | `0.7.0` |
+
+## 开发和构建
+
+Python 侧常用检查：
+
+```powershell
+uv run python -m compileall sources targets pipeline shared semantic cli tests
+uv run ruff format --check .
+uv run ruff check .
+uv run python -m unittest discover -s tests
+uv run python .\main.py schema --format odbpp -o .\sources\odbpp\docs\odbpp_schema.json
+uv run python .\main.py schema --format semantic -o .\semantic\docs\semantic_schema.json
+```
+
+Python 代码提交前应先运行 `uv run ruff format .`。Ruff formatter 是项目标准格式化工具，配置维护在 `pyproject.toml`。
+
+Rust ODB++ parser 构建与 native 安装：
+
+```powershell
+cargo build --release --manifest-path .\crates\odbpp_parser\Cargo.toml
+$env:PYO3_PYTHON = (Resolve-Path .\.venv\Scripts\python.exe).Path
+$env:VIRTUAL_ENV = (Resolve-Path .\.venv).Path
+$env:PATH = "$env:VIRTUAL_ENV\Scripts;$env:PATH"
+uv tool run --from "maturin>=1.8,<2.0" maturin develop --uv --manifest-path .\crates\odbpp_parser\Cargo.toml --release --features python
+```
+
+ODB++ 解析：
+
+```powershell
+uv run python .\main.py odbpp parse <odbpp-dir-or-archive> -o .\out\odbpp.json
+```
+
+如果要显式强制走 CLI，可以设置：
+
+```powershell
+$env:AURORA_ODBPP_PARSER = (Resolve-Path .\crates\odbpp_parser\target\release\odbpp_parser.exe).Path
+```
+
+## 新增格式的推荐步骤
+
+新增一个 PCB 格式时，建议按以下顺序接入：
+
+1. 新建源格式包，例如 `sources/ipc2581/` 或 `sources/gerber/`。
+2. 定义格式自己的 Pydantic 输出模型和 `*_PARSER_VERSION`、`*_JSON_SCHEMA_VERSION`。
+3. 实现解析入口，例如 `parse_ipc2581(...)`。
+4. 增加 `cli/<format>.py` 子命令，并在 `cli/main.py` 路由。
+5. 生成 `*/docs/<format>_schema.json`，并补齐一份中文在前、英文在后的双语字段说明。
+6. 增加格式级 `CHANGELOG.md` 和 `SCHEMA_CHANGELOG.md`。
+7. 需要跨格式转换时，再实现 `semantic/adapters/<format>.py` adapter。
+
+这个顺序能让格式内部先稳定下来，再通过 semantic 层对外提供统一语义。
+
+<a id="en"></a>
+## English
+
+[中文](#zh) | [Back to top](#top)
+
+This document describes the current project-level architecture of Aurora Translator. The project now uses `SemanticBoard` as its single unified intermediate model, with these supported primary flows:
+
+- `AEDB -> SemanticBoard -> AuroraDB / other targets`
+- `ODB++ -> SemanticBoard -> AuroraDB / other targets`
+- `AuroraDB -> SemanticBoard -> other targets`
+
+Format-specific field details remain in each format's own documentation directory.
+
+## Design Goals
+
+Aurora Translator turns PCB and package-related data sources into stable, schema-checkable, version-traceable source-format objects, then normalizes them into `SemanticBoard`, and finally exports target-format files. JSON payloads remain available, but they are now treated as debug, comparison, and archival artifacts rather than the default runtime path.
+
+The current architecture follows a few principles:
+
+- **Source / semantic / target layering**: `sources/*` only parses inputs, `semantic/*` only owns the unified semantics, and `targets/*` only owns target-format export logic.
+- **Format fidelity first**: each input format keeps a high-fidelity output model first, such as `AEDBLayout`, `AuroraDBModel`, or `ODBLayout`.
+- **Unified conversion through `SemanticBoard`**: cross-format conversion goes through `SemanticBoard`; source formats do not export directly into each other.
+- **Independent semantic layer**: the semantic module consumes format objects or format JSON and produces unified PCB objects without polluting format models.
+- **Generated schemas**: machine-readable JSON schemas are generated from models or maintained by model definitions and are versioned at the format level.
+- **Layered versioning**: project version, format parser version, and format JSON schema version are managed separately.
+- **Heavy parsing at the lower layer**: ODB++ text/archive parsing is handled by a Rust parser core that exposes both a PyO3 native module and a CLI; Python handles integration, validation, documentation, and CLI orchestration.
+- **AAF is an AuroraDB target detail**: it is still supported for inspect/compile work, but it is no longer treated as a top-level architecture center.
+
+## Overall Structure
+
+```mermaid
+flowchart TD
+    cli["cli/main.py<br/>Unified command entry"]
+    convert["cli/convert.py<br/>Recommended main workflow"]
+    inspect["cli/inspect.py"]
+    dump["cli/dump.py"]
+    schema["cli/schema.py"]
+
+    sources["sources/*<br/>AEDB / AuroraDB / ODB++"]
+    semantic["semantic/*<br/>SemanticBoard + adapters + passes"]
+    targets["targets/auroradb/*<br/>AuroraDB export (AAF optional)"]
+    rust["crates/odbpp_parser<br/>Rust ODB++ parser"]
+
+    cli --> convert
+    cli --> inspect
+    cli --> dump
+    cli --> schema
+    convert --> sources
+    inspect --> sources
+    dump --> sources
+    sources --> rust
+    sources --> semantic --> targets
+```
+
+## Package Responsibilities
+
+| Directory | Responsibility |
+| --- | --- |
+| `sources/aedb/` | AEDB source parsing, PyEDB session management, extractors, schema, and format-level changelogs. |
+| `sources/auroradb/` | AuroraDB source reading, block/model handling, inspect/diff, schema, and format docs. |
+| `sources/odbpp/` | ODB++ Python integration layer, native-first Rust parser invocation with CLI fallback, `ODBLayout` validation, schema export, and coverage helpers. |
+| `semantic/` | The unified `SemanticBoard`, format adapters, connectivity, and semantic diagnostics. |
+| `targets/auroradb/` | The `SemanticBoard -> AuroraDB` export path, with AAF kept only as an internal or explicitly exported intermediate; `exporter.py` is now top-level orchestration only, `plan.py` owns export indexes, `direct.py` owns direct AuroraDB builder state, `layout.py` owns `layout.db` / `design.layout` emission, `parts.py` owns `parts.db` / `design.part` emission and part/footprint planning, `geometry.py` owns shape / via / trace / polygon geometry commands and payloads, `stackup.py` owns stackup planning/serialization, `formatting.py` owns unit / number / rotation formatting helpers, and `names.py` owns naming plus AAF quoting helpers. |
+| `pipeline/` | The `source -> semantic -> target` orchestration layer. |
+| `shared/` | Shared logging, runtime metrics, JSON output, and utility helpers. |
+| `crates/odbpp_parser/` | Rust ODB++ parser core, CLI, and PyO3 native module for directory/archive reading and ODB++ text record parsing; summary-only, explicit-step, and default auto-step detail paths skip unnecessary detail files. |
+| `cli/` | The new `convert / inspect / dump / schema` entrypoints plus compatibility commands. |
+| `docs/` | Project-level documentation and project-level changelogs. Format-level documents live under each `*/docs/` directory. |
+
+The repository root is mapped as the `aurora_translator` package by `pyproject.toml`. The codebase now lives under `sources / semantic / targets / pipeline / shared`.
+
+## CLI Routing
+
+The top-level entry point is `aurora_translator.cli:main`. During local development, the common form is:
+
+```powershell
+uv run python .\main.py ...
+```
+
+Current routing:
+
+| Command | Entry Point | Description |
+| --- | --- | --- |
+| `main.py <path-to-board.aedb>` | `cli/main.py` | Default AEDB parsing path. |
+| `main.py --print-schema` | `cli/main.py` | Print the AEDB JSON schema. |
+| `main.py convert ...` | `cli/convert.py` | Recommended main path: `source -> SemanticBoard -> target`. |
+| `main.py inspect ...` | `cli/inspect.py` | Inspect source files or AAF files. |
+| `main.py dump ...` | `cli/dump.py` | Explicitly export source JSON or semantic JSON. |
+| `main.py schema ...` | `cli/schema.py` | Export machine-readable schemas. |
+| `main.py auroradb ...` | `cli/auroradb.py` | Compatibility AuroraDB inspect/export/schema/diff/AAF commands. |
+| `main.py odbpp ...` | `cli/odbpp.py` | Compatibility ODB++ parse/schema/to-auroradb commands. |
+| `main.py semantic ...` | `cli/semantic.py` | Compatibility semantic from-json/from-source/source-to-aaf/source-to-auroradb/to-aaf/to-auroradb/schema commands. |
+
+## AEDB Parsing Flow
+
+AEDB parsing runs entirely on the Python side and depends on PyEDB's local `.NET` backend.
+
+```mermaid
+flowchart LR
+    source[".aedb directory"]
+    parser["sources/aedb/parser.py<br/>parse_aedb()"]
+    session["sources/aedb/session.py<br/>open_aedb_session()"]
+    extractors["sources/aedb/extractors/*"]
+    model["sources/aedb/models.py<br/>AEDBLayout"]
+    json["AEDB JSON"]
+
+    source --> parser --> session --> extractors --> model --> json
+```
+
+Key points:
+
+- `sources/aedb/session.py` opens and closes the PyEDB session.
+- `sources/aedb/extractors/layout.py` coordinates domain extractors and builds the payload.
+- `sources/aedb/models.py` is the authoritative definition of the AEDB JSON structure.
+- `AEDBLayout.model_json_schema()` generates the machine-readable schema.
+- `convert --from aedb --to auroradb` automatically uses the `auroradb-minimal` parse profile when neither `--source-output` nor `--semantic-output` is requested; it keeps only fields and runtime-private geometry caches required by AuroraDB export to reduce path / polygon parse time.
+- Explicit AEDB JSON or Semantic JSON export always uses the complete `full` profile. Pass `--aedb-parse-profile full` to force full parsing on direct AuroraDB conversion.
+
+## AuroraDB Parsing Flow
+
+AuroraDB parsing keeps two views: the raw block tree and a structured Pydantic model. AAF is an AuroraDB input submodule, not a separate top-level format.
+
+```mermaid
+flowchart TD
+    db["AuroraDB directory<br/>layout.db / parts.db / layers/*.lyr"]
+    aaf["AAF commands<br/>design.layout / design.part"]
+    block["AuroraBlock / AuroraItem"]
+    package["AuroraDBPackage"]
+    model["AuroraDBModel"]
+    json["AuroraDB JSON"]
+    writer["AuroraDB writer"]
+
+    db --> block --> package
+    aaf --> package
+    package --> model --> json
+    package --> writer
+```
+
+See [sources/auroradb/docs/architecture.md](../sources/auroradb/docs/architecture.md) for the detailed AuroraDB architecture.
+
+## ODB++ Parsing Flow
+
+ODB++ parsing uses a Rust + Python two-layer structure.
+
+ODB++ parsing and semantic mapping currently use the official `ODB++Design Format Specification Release 8.1 Update 4, August 2024` as the primary reference ([PDF](https://odbplusplus.com//wp-content/uploads/sites/2/2024/08/odb_spec_user.pdf), [Resources](https://odbplusplus.com/design/our-resources/)).
+
+```mermaid
+flowchart LR
+    source["ODB++ directory / zip / tgz / tar"]
+    rust["crates/odbpp_parser<br/>Rust core"]
+    native["PyO3 native module"]
+    cli["Rust CLI"]
+    raw_json["CLI JSON output"]
+    py["sources/odbpp/parser.py<br/>parse_odbpp()"]
+    model["sources/odbpp/models.py<br/>ODBLayout"]
+    source --> rust
+    rust --> native --> py --> model
+    rust --> cli --> raw_json --> py
+```
+
+The Rust side is responsible for:
+
+- Reading ODB++ directories, `.zip`, `.tgz`, `.tar.gz`, and `.tar` archives.
+- Detecting the product root.
+- Parsing `matrix/matrix`, `steps/<step>/profile`, layer `features`, layer `tools`, component records, EDA package definitions, and net records.
+- Preserving ODB++ feature indices, feature IDs, surface contours, symbol-library features, drill/rout tools, EDA package pins and package geometry, component pins, component PRP properties, and EDA net references (`FID` feature links, `SNT TOP T/B` pin links, and pin context on FID records).
+- Emitting JSON through the CLI path and Python-consumable object graphs through the PyO3 native path.
+
+The Python side is responsible for:
+
+- Importing `aurora_odbpp_native` when available, otherwise locating or accepting an `odbpp_parser.exe` path.
+- Injecting `PROJECT_VERSION`, `ODBPP_PARSER_VERSION`, and `ODBPP_JSON_SCHEMA_VERSION`.
+- Validating Rust output as `ODBLayout`.
+- Writing JSON, exporting the Pydantic schema, and generating optional conversion coverage reports.
+
+The current Rust parser covers the core file structure plus the connectivity data needed for ODB++ to Semantic conversion. ODB++ layer `attrlist` files, package definitions, and drill tools are parsed enough for stackup material/thickness extraction, component footprint fallback, full package-body footprint publication, via layer spans, and top-level drill metadata. The Semantic adapter also refines via templates from matched signal-layer pads and negative pad antipads, splits surface polygons by `I`/`H` contour polarity, preserves ODB++ contour `OC` arcs through Semantic export as AuroraDB `Parc` polygon edges, maps ODB++ reserved no-net names such as `$NONE$` to the AuroraDB `NoNet` keyword, and promotes positive no-net trace/arc/polygon primitives on routable layers into `NoNet` geometry. Non-routable drawing features remain coverage-only. More complex negative/void composition beyond direct via antipad matching, thermal constraints, soldermask/paste semantics, and full material-library reconstruction remain incremental parser work.
+
+## Semantic Flow
+
+The Semantic layer can consume either exported format JSON or in-memory format objects and generate unified semantic objects:
+
+```mermaid
+flowchart LR
+    source["AEDB / AuroraDB / ODB++ JSON"]
+    adapter["semantic.adapters"]
+    model["semantic/models.py<br/>SemanticBoard"]
+    pass["semantic/passes.py<br/>connectivity + diagnostics"]
+    json["Semantic JSON"]
+
+    source --> adapter --> model --> pass --> json
+```
+
+The current semantic model includes layers, materials, shapes, via templates, nets, components, footprints, pins, pads, vias, primitives, board outline/profile geometry, connectivity, and diagnostics. Footprint, via-template, pad, via, primitive, and board-outline `geometry` fields now use typed hint models with an `extra` escape hatch for source-format metadata; downstream code can still read declared fields and compatible metadata through `.get()`. Every object has a `SourceRef` that can trace it back to the source-format field. The semantic layer itself now focuses on the unified model plus adapters and passes, while the actual Aurora/AAF / AuroraDB target export implementation has been moved into `targets/auroradb/`. By default, that target path writes `layout.db`, `parts.db`, `layers/`, `stackup.dat`, and `stackup.json` directly into the AuroraDB output directory; `aaf/design.layout` and `aaf/design.part` are kept only when requested explicitly. Signal/plane layers enter the AuroraDB metal-layer structure, while dielectric layers stay in the stackup files. For AEDB-derived payloads, the Aurora/AAF exporter also infers component placement rotation and part/footprint variants from pad topology when the raw AEDB component transform does not preserve canonical footprint orientation.
+
+See [semantic/docs/architecture.md](../semantic/docs/architecture.md) for the detailed semantic architecture.
+
+## JSON Schema And Documents
+
+| Format | Schema | Bilingual Field Guide | Changelogs |
+| --- | --- | --- | --- |
+| AEDB | `sources/aedb/docs/aedb_schema.json` | `sources/aedb/docs/aedb_json_schema.md` | `sources/aedb/docs/CHANGELOG.md`, `sources/aedb/docs/SCHEMA_CHANGELOG.md` |
+| AuroraDB | `sources/auroradb/docs/auroradb_schema.json` | `sources/auroradb/docs/auroradb_json_schema.md` | `sources/auroradb/docs/CHANGELOG.md`, `sources/auroradb/docs/SCHEMA_CHANGELOG.md` |
+| ODB++ | `sources/odbpp/docs/odbpp_schema.json` | `sources/odbpp/docs/odbpp_json_schema.md` | `sources/odbpp/docs/CHANGELOG.md`, `sources/odbpp/docs/SCHEMA_CHANGELOG.md` |
+| Semantic | `semantic/docs/semantic_schema.json` | `semantic/docs/semantic_json_schema.md` | `semantic/docs/CHANGELOG.md`, `semantic/docs/SCHEMA_CHANGELOG.md` |
+
+Common schema generation commands:
+
+```powershell
+uv run python .\main.py --schema-output .\sources\aedb\docs\aedb_schema.json
+uv run python .\main.py auroradb schema -o .\sources\auroradb\docs\auroradb_schema.json
+uv run python .\main.py odbpp schema -o .\sources\odbpp\docs\odbpp_schema.json
+uv run python .\main.py semantic schema -o .\semantic\docs\semantic_schema.json
+```
+
+## Version Management
+
+Versioning has three layers:
+
+| Layer | Constants | Purpose |
+| --- | --- | --- |
+| Project version | `version.PROJECT_VERSION` | Overall Aurora Translator release version. |
+| Format parser version | `AEDB_PARSER_VERSION` / `AURORADB_PARSER_VERSION` / `ODBPP_PARSER_VERSION` | Version for a specific format's parsing logic, performance behavior, or integration path. |
+| Format JSON schema version | `AEDB_JSON_SCHEMA_VERSION` / `AURORADB_JSON_SCHEMA_VERSION` / `ODBPP_JSON_SCHEMA_VERSION` | Version for a specific format's JSON output contract. |
+| Semantic version | `SEMANTIC_PARSER_VERSION` / `SEMANTIC_JSON_SCHEMA_VERSION` | Version for semantic conversion logic and the semantic JSON output contract. |
+
+JSON payloads consistently emit:
+
+```json
+{
+  "metadata": {
+    "project_version": "...",
+    "parser_version": "...",
+    "output_schema_version": "..."
+  }
+}
+```
+
+Change rules:
+
+- Implementation changes without output field changes: update the corresponding format parser version.
+- JSON field, field meaning, or structural changes: update the corresponding format JSON schema version.
+- Project-level release or integrated format-level changes: update `PROJECT_VERSION` and `docs/CHANGELOG.md`.
+
+Current versions:
+
+| Item | Version |
+| --- | --- |
+| Project | `1.0.42` |
+| AEDB parser | `0.4.56` |
+| AEDB JSON schema | `0.5.0` |
+| AuroraDB parser | `0.2.13` |
+| AuroraDB JSON schema | `0.2.0` |
+| ODB++ parser | `0.6.3` |
+| ODB++ JSON schema | `0.6.0` |
+| Semantic parser | `0.7.1` |
+| Semantic JSON schema | `0.7.0` |
+
+## Development And Build
+
+Common Python-side checks:
+
+```powershell
+uv run python -m compileall sources targets pipeline shared semantic cli tests
+uv run ruff format --check .
+uv run ruff check .
+uv run python -m unittest discover -s tests
+uv run python .\main.py schema --format odbpp -o .\sources\odbpp\docs\odbpp_schema.json
+uv run python .\main.py schema --format semantic -o .\semantic\docs\semantic_schema.json
+```
+
+Before committing Python code, run `uv run ruff format .`. The Ruff formatter is the project-standard formatting tool and is configured in `pyproject.toml`.
+
+Build the Rust ODB++ parser and install the native module:
+
+```powershell
+cargo build --release --manifest-path .\crates\odbpp_parser\Cargo.toml
+$env:PYO3_PYTHON = (Resolve-Path .\.venv\Scripts\python.exe).Path
+$env:VIRTUAL_ENV = (Resolve-Path .\.venv).Path
+$env:PATH = "$env:VIRTUAL_ENV\Scripts;$env:PATH"
+uv tool run --from "maturin>=1.8,<2.0" maturin develop --uv --manifest-path .\crates\odbpp_parser\Cargo.toml --release --features python
+```
+
+Parse ODB++:
+
+```powershell
+uv run python .\main.py odbpp parse <odbpp-dir-or-archive> -o .\out\odbpp.json
+```
+
+To force the CLI backend explicitly, set:
+
+```powershell
+$env:AURORA_ODBPP_PARSER = (Resolve-Path .\crates\odbpp_parser\target\release\odbpp_parser.exe).Path
+```
+
+## Recommended Steps For Adding A Format
+
+When adding a new PCB format, use this sequence:
+
+1. Add a source-format package, for example `sources/ipc2581/` or `sources/gerber/`.
+2. Define the format's Pydantic output model and `*_PARSER_VERSION` / `*_JSON_SCHEMA_VERSION`.
+3. Implement a parse entry point such as `parse_ipc2581(...)`.
+4. Add `cli/<format>.py` and route it from `cli/main.py`.
+5. Generate `*/docs/<format>_schema.json` and add one bilingual field guide with Chinese first and English second.
+6. Add format-level `CHANGELOG.md` and `SCHEMA_CHANGELOG.md`.
+7. Add a `semantic/adapters/<format>.py` adapter when cross-format conversion is needed.
+
+This order lets each format stabilize internally before exposing it through the semantic layer.
+

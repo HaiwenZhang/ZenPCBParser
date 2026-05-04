@@ -1,0 +1,1943 @@
+{
+  "$defs": {
+    "ComponentModel": {
+      "additionalProperties": false,
+      "properties": {
+        "step_name": {
+          "description": "ODB++ step that owns this component record.",
+          "title": "Step Name",
+          "type": "string"
+        },
+        "layer_name": {
+          "description": "ODB++ component layer name.",
+          "title": "Layer Name",
+          "type": "string"
+        },
+        "line_number": {
+          "description": "1-based line number inside the component file.",
+          "minimum": 1,
+          "title": "Line Number",
+          "type": "integer"
+        },
+        "record_type": {
+          "description": "Component source record kind.",
+          "title": "Record Type",
+          "type": "string"
+        },
+        "component_index": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Component index from the component-file comment when present.",
+          "title": "Component Index"
+        },
+        "package_index": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Referenced ODB++ package index when present.",
+          "title": "Package Index"
+        },
+        "refdes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Reference designator when inferred from tokens.",
+          "title": "Refdes"
+        },
+        "package_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Package name when inferred from tokens.",
+          "title": "Package Name"
+        },
+        "part_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Part name when inferred from tokens.",
+          "title": "Part Name"
+        },
+        "location": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PointModel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Component placement point when present."
+        },
+        "rotation": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Component rotation in source units/degrees when present.",
+          "title": "Rotation"
+        },
+        "mirror": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Component mirror/orientation source flag when present.",
+          "title": "Mirror"
+        },
+        "properties": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Component PRP properties.",
+          "title": "Properties"
+        },
+        "pins": {
+          "description": "Pins owned by this component.",
+          "items": {
+            "$ref": "#/$defs/ComponentPinModel"
+          },
+          "title": "Pins",
+          "type": "array"
+        },
+        "tokens": {
+          "description": "Tokenized source component record.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Tokens",
+          "type": "array"
+        }
+      },
+      "required": [
+        "step_name",
+        "layer_name",
+        "line_number",
+        "record_type"
+      ],
+      "title": "ComponentModel",
+      "type": "object"
+    },
+    "ComponentPinModel": {
+      "additionalProperties": false,
+      "properties": {
+        "line_number": {
+          "description": "1-based line number inside the component file.",
+          "minimum": 1,
+          "title": "Line Number",
+          "type": "integer"
+        },
+        "record_type": {
+          "description": "Pin source record kind, usually TOP or BOT.",
+          "title": "Record Type",
+          "type": "string"
+        },
+        "pin_index": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Pin index in the component record.",
+          "title": "Pin Index"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Pin name or number.",
+          "title": "Name"
+        },
+        "position": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PointModel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Pin placement point."
+        },
+        "rotation": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Pin rotation when present.",
+          "title": "Rotation"
+        },
+        "mirror": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Pin mirror/orientation source flag when present.",
+          "title": "Mirror"
+        },
+        "net_component_index": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "ODB++ net reference component key.",
+          "title": "Net Component Index"
+        },
+        "net_pin_index": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "ODB++ net reference pin key.",
+          "title": "Net Pin Index"
+        },
+        "tokens": {
+          "description": "Tokenized source pin record.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Tokens",
+          "type": "array"
+        }
+      },
+      "required": [
+        "line_number",
+        "record_type"
+      ],
+      "title": "ComponentPinModel",
+      "type": "object"
+    },
+    "ContourVertexModel": {
+      "additionalProperties": false,
+      "properties": {
+        "record_type": {
+          "description": "ODB++ contour record kind, for example OB, OS, or OC.",
+          "title": "Record Type",
+          "type": "string"
+        },
+        "point": {
+          "$ref": "#/$defs/PointModel",
+          "description": "Contour vertex point."
+        },
+        "center": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PointModel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Arc center point for OC records."
+        },
+        "clockwise": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Arc direction flag for OC records when available.",
+          "title": "Clockwise"
+        }
+      },
+      "required": [
+        "record_type",
+        "point"
+      ],
+      "title": "ContourVertexModel",
+      "type": "object"
+    },
+    "DrillLayerToolsModel": {
+      "additionalProperties": false,
+      "properties": {
+        "step_name": {
+          "description": "ODB++ step that owns this tools file.",
+          "title": "Step Name",
+          "type": "string"
+        },
+        "layer_name": {
+          "description": "ODB++ layer name that owns these tool definitions.",
+          "title": "Layer Name",
+          "type": "string"
+        },
+        "units": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Units declared in the tools file when present.",
+          "title": "Units"
+        },
+        "thickness": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Layer tools file THICKNESS value when present.",
+          "title": "Thickness"
+        },
+        "user_params": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Layer tools file USER_PARAMS value when present.",
+          "title": "User Params"
+        },
+        "raw_fields": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Top-level tools file fields outside TOOLS blocks.",
+          "title": "Raw Fields",
+          "type": "object"
+        },
+        "tools": {
+          "description": "Parsed tools from the layer tools file.",
+          "items": {
+            "$ref": "#/$defs/DrillToolModel"
+          },
+          "title": "Tools",
+          "type": "array"
+        }
+      },
+      "required": [
+        "step_name",
+        "layer_name"
+      ],
+      "title": "DrillLayerToolsModel",
+      "type": "object"
+    },
+    "DrillToolModel": {
+      "additionalProperties": false,
+      "properties": {
+        "number": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Tool number inside the ODB++ tools block.",
+          "title": "Number"
+        },
+        "tool_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "ODB++ tool type, for example VIA.",
+          "title": "Tool Type"
+        },
+        "type2": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Secondary ODB++ tool type.",
+          "title": "Type2"
+        },
+        "finish_size": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Finished hole size from the tools file.",
+          "title": "Finish Size"
+        },
+        "drill_size": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Drill size from the tools file.",
+          "title": "Drill Size"
+        },
+        "raw_fields": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Raw tool key/value fields.",
+          "title": "Raw Fields",
+          "type": "object"
+        }
+      },
+      "title": "DrillToolModel",
+      "type": "object"
+    },
+    "FeatureModel": {
+      "additionalProperties": false,
+      "properties": {
+        "feature_index": {
+          "default": 0,
+          "description": "Zero-based ODB++ feature index inside the feature file.",
+          "minimum": 0,
+          "title": "Feature Index",
+          "type": "integer"
+        },
+        "kind": {
+          "description": "ODB++ feature record kind, for example P, L, A, S, T, or B.",
+          "title": "Kind",
+          "type": "string"
+        },
+        "line_number": {
+          "description": "1-based line number inside the feature file.",
+          "minimum": 1,
+          "title": "Line Number",
+          "type": "integer"
+        },
+        "tokens": {
+          "description": "Tokenized source feature record.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Tokens",
+          "type": "array"
+        },
+        "feature_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "ODB++ ID attribute when present.",
+          "title": "Feature Id"
+        },
+        "attributes": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Parsed semicolon attributes from the feature.",
+          "title": "Attributes",
+          "type": "object"
+        },
+        "polarity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Feature polarity when inferred from the record.",
+          "title": "Polarity"
+        },
+        "symbol": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Referenced ODB++ symbol when inferred from the record.",
+          "title": "Symbol"
+        },
+        "start": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PointModel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Start or placement point when coordinates are available."
+        },
+        "end": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PointModel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "End point for line or arc records when available."
+        },
+        "center": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PointModel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Arc center point when available."
+        },
+        "contours": {
+          "description": "Surface contours for S records.",
+          "items": {
+            "$ref": "#/$defs/SurfaceContourModel"
+          },
+          "title": "Contours",
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "line_number"
+      ],
+      "title": "FeatureModel",
+      "type": "object"
+    },
+    "LayerFeaturesModel": {
+      "additionalProperties": false,
+      "properties": {
+        "step_name": {
+          "description": "ODB++ step that owns this feature file.",
+          "title": "Step Name",
+          "type": "string"
+        },
+        "layer_name": {
+          "description": "ODB++ layer name.",
+          "title": "Layer Name",
+          "type": "string"
+        },
+        "units": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Units declared in the feature file when present.",
+          "title": "Units"
+        },
+        "layer_attributes": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Attributes parsed from the layer attrlist file.",
+          "title": "Layer Attributes",
+          "type": "object"
+        },
+        "symbols": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Feature-file symbol lookup table.",
+          "title": "Symbols",
+          "type": "object"
+        },
+        "attributes": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Feature-file attribute lookup table.",
+          "title": "Attributes",
+          "type": "object"
+        },
+        "text_strings": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Feature-file text lookup table.",
+          "title": "Text Strings",
+          "type": "object"
+        },
+        "features": {
+          "description": "Parsed feature records.",
+          "items": {
+            "$ref": "#/$defs/FeatureModel"
+          },
+          "title": "Features",
+          "type": "array"
+        }
+      },
+      "required": [
+        "step_name",
+        "layer_name"
+      ],
+      "title": "LayerFeaturesModel",
+      "type": "object"
+    },
+    "LineRecordModel": {
+      "additionalProperties": false,
+      "properties": {
+        "line_number": {
+          "description": "1-based line number inside the source file.",
+          "minimum": 1,
+          "title": "Line Number",
+          "type": "integer"
+        },
+        "kind": {
+          "description": "First token or record kind.",
+          "title": "Kind",
+          "type": "string"
+        },
+        "tokens": {
+          "description": "Tokenized source record.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Tokens",
+          "type": "array"
+        }
+      },
+      "required": [
+        "line_number",
+        "kind"
+      ],
+      "title": "LineRecordModel",
+      "type": "object"
+    },
+    "MatrixModel": {
+      "additionalProperties": false,
+      "properties": {
+        "rows": {
+          "description": "Parsed rows from matrix/matrix.",
+          "items": {
+            "$ref": "#/$defs/MatrixRowModel"
+          },
+          "title": "Rows",
+          "type": "array"
+        }
+      },
+      "title": "MatrixModel",
+      "type": "object"
+    },
+    "MatrixRowModel": {
+      "additionalProperties": false,
+      "properties": {
+        "row": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Matrix row or id value when present.",
+          "title": "Row"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Layer or matrix row name.",
+          "title": "Name"
+        },
+        "context": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "ODB++ row context, for example board or misc.",
+          "title": "Context"
+        },
+        "layer_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "ODB++ row type, for example signal or component.",
+          "title": "Layer Type"
+        },
+        "polarity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Layer polarity when present.",
+          "title": "Polarity"
+        },
+        "side": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Layer side when present.",
+          "title": "Side"
+        },
+        "start_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Start layer name for drill or stackup ranges.",
+          "title": "Start Name"
+        },
+        "end_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "End layer name for drill or stackup ranges.",
+          "title": "End Name"
+        },
+        "raw_fields": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Raw matrix row key/value fields.",
+          "title": "Raw Fields",
+          "type": "object"
+        }
+      },
+      "title": "MatrixRowModel",
+      "type": "object"
+    },
+    "NetFeatureRefModel": {
+      "additionalProperties": false,
+      "properties": {
+        "line_number": {
+          "description": "1-based line number inside the source net file.",
+          "minimum": 1,
+          "title": "Line Number",
+          "type": "integer"
+        },
+        "subnet_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Current SNT record type associated with this FID.",
+          "title": "Subnet Type"
+        },
+        "class_code": {
+          "description": "ODB++ FID class code, for example C or H.",
+          "title": "Class Code",
+          "type": "string"
+        },
+        "layer_index": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Layer index from the EDA LYR table.",
+          "title": "Layer Index"
+        },
+        "layer_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Layer name resolved from the EDA LYR table.",
+          "title": "Layer Name"
+        },
+        "feature_index": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Zero-based feature index inside the layer feature file.",
+          "title": "Feature Index"
+        },
+        "pin_side": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Associated component side for FID records following SNT TOP T/B.",
+          "title": "Pin Side"
+        },
+        "net_component_index": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Associated ODB++ net reference component key.",
+          "title": "Net Component Index"
+        },
+        "net_pin_index": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Associated ODB++ net reference pin key.",
+          "title": "Net Pin Index"
+        },
+        "tokens": {
+          "description": "Tokenized FID record.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Tokens",
+          "type": "array"
+        }
+      },
+      "required": [
+        "line_number",
+        "class_code"
+      ],
+      "title": "NetFeatureRefModel",
+      "type": "object"
+    },
+    "NetModel": {
+      "additionalProperties": false,
+      "properties": {
+        "step_name": {
+          "description": "ODB++ step that owns this net record.",
+          "title": "Step Name",
+          "type": "string"
+        },
+        "name": {
+          "description": "Net name.",
+          "title": "Name",
+          "type": "string"
+        },
+        "source_file": {
+          "description": "ODB++ source file where the net was discovered.",
+          "title": "Source File",
+          "type": "string"
+        },
+        "line_number": {
+          "description": "1-based line number inside the source file.",
+          "minimum": 1,
+          "title": "Line Number",
+          "type": "integer"
+        },
+        "tokens": {
+          "description": "Tokenized source net record.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Tokens",
+          "type": "array"
+        },
+        "feature_refs": {
+          "description": "Feature references attached to this net.",
+          "items": {
+            "$ref": "#/$defs/NetFeatureRefModel"
+          },
+          "title": "Feature Refs",
+          "type": "array"
+        },
+        "pin_refs": {
+          "description": "Component pin references attached to this net.",
+          "items": {
+            "$ref": "#/$defs/NetPinRefModel"
+          },
+          "title": "Pin Refs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "step_name",
+        "name",
+        "source_file",
+        "line_number"
+      ],
+      "title": "NetModel",
+      "type": "object"
+    },
+    "NetPinRefModel": {
+      "additionalProperties": false,
+      "properties": {
+        "line_number": {
+          "description": "1-based line number inside the source net file.",
+          "minimum": 1,
+          "title": "Line Number",
+          "type": "integer"
+        },
+        "side": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Component side resolved from SNT TOP T/B records.",
+          "title": "Side"
+        },
+        "net_component_index": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "ODB++ net reference component key.",
+          "title": "Net Component Index"
+        },
+        "net_pin_index": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "ODB++ net reference pin key.",
+          "title": "Net Pin Index"
+        },
+        "tokens": {
+          "description": "Tokenized SNT pin record.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Tokens",
+          "type": "array"
+        }
+      },
+      "required": [
+        "line_number"
+      ],
+      "title": "NetPinRefModel",
+      "type": "object"
+    },
+    "ODBPPMetadata": {
+      "additionalProperties": false,
+      "properties": {
+        "project_version": {
+          "description": "Aurora Translator project version that produced this ODB++ payload.",
+          "title": "Project Version",
+          "type": "string"
+        },
+        "parser_version": {
+          "description": "ODB++ parser version that produced this payload.",
+          "title": "Parser Version",
+          "type": "string"
+        },
+        "output_schema_version": {
+          "description": "ODB++ JSON schema version for this payload.",
+          "title": "Output Schema Version",
+          "type": "string"
+        },
+        "source": {
+          "description": "Source ODB++ directory or archive path.",
+          "title": "Source",
+          "type": "string"
+        },
+        "source_type": {
+          "description": "Physical source container type detected by the Rust parser.",
+          "enum": [
+            "directory",
+            "zip",
+            "tgz",
+            "tar",
+            "unknown"
+          ],
+          "title": "Source Type",
+          "type": "string"
+        },
+        "selected_step": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "ODB++ step used for detailed layer, component, and net extraction.",
+          "title": "Selected Step"
+        },
+        "backend": {
+          "description": "Parser backend used by Aurora Translator.",
+          "enum": [
+            "rust-cli",
+            "rust-native"
+          ],
+          "title": "Backend",
+          "type": "string"
+        },
+        "rust_parser_version": {
+          "description": "Version reported by the Rust ODB++ parser implementation.",
+          "title": "Rust Parser Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_version",
+        "parser_version",
+        "output_schema_version",
+        "source",
+        "source_type",
+        "backend",
+        "rust_parser_version"
+      ],
+      "title": "ODBPPMetadata",
+      "type": "object"
+    },
+    "ODBPPSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "step_count": {
+          "description": "Number of ODB++ steps found under steps/.",
+          "minimum": 0,
+          "title": "Step Count",
+          "type": "integer"
+        },
+        "layer_count": {
+          "description": "Number of rows parsed from matrix/matrix.",
+          "minimum": 0,
+          "title": "Layer Count",
+          "type": "integer"
+        },
+        "board_layer_count": {
+          "description": "Number of matrix rows with board context.",
+          "minimum": 0,
+          "title": "Board Layer Count",
+          "type": "integer"
+        },
+        "signal_layer_count": {
+          "description": "Number of matrix rows whose type is signal.",
+          "minimum": 0,
+          "title": "Signal Layer Count",
+          "type": "integer"
+        },
+        "component_layer_count": {
+          "description": "Number of matrix rows whose type is component.",
+          "minimum": 0,
+          "title": "Component Layer Count",
+          "type": "integer"
+        },
+        "feature_layer_count": {
+          "description": "Number of selected-step layer feature files parsed.",
+          "minimum": 0,
+          "title": "Feature Layer Count",
+          "type": "integer"
+        },
+        "feature_count": {
+          "description": "Number of selected-step feature records parsed.",
+          "minimum": 0,
+          "title": "Feature Count",
+          "type": "integer"
+        },
+        "symbol_count": {
+          "default": 0,
+          "description": "Number of ODB++ symbol library feature files parsed.",
+          "minimum": 0,
+          "title": "Symbol Count",
+          "type": "integer"
+        },
+        "drill_tool_count": {
+          "default": 0,
+          "description": "Number of selected-step drill/rout tool records parsed.",
+          "minimum": 0,
+          "title": "Drill Tool Count",
+          "type": "integer"
+        },
+        "package_count": {
+          "default": 0,
+          "description": "Number of selected-step EDA package definitions parsed.",
+          "minimum": 0,
+          "title": "Package Count",
+          "type": "integer"
+        },
+        "component_count": {
+          "description": "Number of selected-step component records parsed.",
+          "minimum": 0,
+          "title": "Component Count",
+          "type": "integer"
+        },
+        "net_count": {
+          "description": "Number of unique selected-step nets discovered.",
+          "minimum": 0,
+          "title": "Net Count",
+          "type": "integer"
+        },
+        "profile_record_count": {
+          "description": "Number of profile line records parsed across steps.",
+          "minimum": 0,
+          "title": "Profile Record Count",
+          "type": "integer"
+        },
+        "diagnostic_count": {
+          "description": "Number of non-fatal parser diagnostics.",
+          "minimum": 0,
+          "title": "Diagnostic Count",
+          "type": "integer"
+        },
+        "step_names": {
+          "description": "Discovered ODB++ step names.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Step Names",
+          "type": "array"
+        },
+        "layer_names": {
+          "description": "Layer names parsed from matrix/matrix.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Layer Names",
+          "type": "array"
+        },
+        "net_names": {
+          "description": "Unique selected-step net names.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Net Names",
+          "type": "array"
+        }
+      },
+      "required": [
+        "step_count",
+        "layer_count",
+        "board_layer_count",
+        "signal_layer_count",
+        "component_layer_count",
+        "feature_layer_count",
+        "feature_count",
+        "component_count",
+        "net_count",
+        "profile_record_count",
+        "diagnostic_count"
+      ],
+      "title": "ODBPPSummary",
+      "type": "object"
+    },
+    "PackageBoundsModel": {
+      "additionalProperties": false,
+      "properties": {
+        "min": {
+          "$ref": "#/$defs/PointModel",
+          "description": "Minimum package bounding point."
+        },
+        "max": {
+          "$ref": "#/$defs/PointModel",
+          "description": "Maximum package bounding point."
+        }
+      },
+      "required": [
+        "min",
+        "max"
+      ],
+      "title": "PackageBoundsModel",
+      "type": "object"
+    },
+    "PackageDefinitionModel": {
+      "additionalProperties": false,
+      "properties": {
+        "step_name": {
+          "description": "ODB++ step that owns this package definition.",
+          "title": "Step Name",
+          "type": "string"
+        },
+        "line_number": {
+          "description": "1-based line number inside the EDA data file.",
+          "minimum": 1,
+          "title": "Line Number",
+          "type": "integer"
+        },
+        "package_index": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Package index from the preceding ODB++ package comment.",
+          "title": "Package Index"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "ODB++ package name.",
+          "title": "Name"
+        },
+        "feature_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "ODB++ ID attribute for the package definition.",
+          "title": "Feature Id"
+        },
+        "pitch": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Package pitch value when present.",
+          "title": "Pitch"
+        },
+        "bounds": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PackageBoundsModel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Package bounding box when present."
+        },
+        "properties": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Package PRP properties.",
+          "title": "Properties"
+        },
+        "outlines": {
+          "description": "Package outline/body geometry records.",
+          "items": {
+            "$ref": "#/$defs/PackageShapeModel"
+          },
+          "title": "Outlines",
+          "type": "array"
+        },
+        "pins": {
+          "description": "Package pin definitions.",
+          "items": {
+            "$ref": "#/$defs/PackagePinModel"
+          },
+          "title": "Pins",
+          "type": "array"
+        },
+        "tokens": {
+          "description": "Tokenized source package record.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Tokens",
+          "type": "array"
+        }
+      },
+      "required": [
+        "step_name",
+        "line_number"
+      ],
+      "title": "PackageDefinitionModel",
+      "type": "object"
+    },
+    "PackagePinModel": {
+      "additionalProperties": false,
+      "properties": {
+        "line_number": {
+          "description": "1-based line number inside the package source.",
+          "minimum": 1,
+          "title": "Line Number",
+          "type": "integer"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Package pin name.",
+          "title": "Name"
+        },
+        "side": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Package pin side/type flag from ODB++.",
+          "title": "Side"
+        },
+        "position": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PointModel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Pin position in package-local coordinates."
+        },
+        "rotation": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Pin rotation in source degrees when present.",
+          "title": "Rotation"
+        },
+        "electrical_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "ODB++ package pin electrical type flag.",
+          "title": "Electrical Type"
+        },
+        "mount_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "ODB++ package pin mount/type flag.",
+          "title": "Mount Type"
+        },
+        "feature_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "ODB++ ID attribute for the package pin.",
+          "title": "Feature Id"
+        },
+        "shapes": {
+          "description": "Geometry records associated with this package pin.",
+          "items": {
+            "$ref": "#/$defs/PackageShapeModel"
+          },
+          "title": "Shapes",
+          "type": "array"
+        },
+        "tokens": {
+          "description": "Tokenized source package pin record.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Tokens",
+          "type": "array"
+        }
+      },
+      "required": [
+        "line_number"
+      ],
+      "title": "PackagePinModel",
+      "type": "object"
+    },
+    "PackageShapeModel": {
+      "additionalProperties": false,
+      "properties": {
+        "line_number": {
+          "description": "1-based line number inside the package source.",
+          "minimum": 1,
+          "title": "Line Number",
+          "type": "integer"
+        },
+        "kind": {
+          "description": "ODB++ package geometry record kind, for example RC, CR, SQ, or CT.",
+          "title": "Kind",
+          "type": "string"
+        },
+        "tokens": {
+          "description": "Tokenized source package geometry record.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Tokens",
+          "type": "array"
+        },
+        "center": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PointModel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Geometry center in package-local coordinates."
+        },
+        "width": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Rectangle width when this shape is an RC record.",
+          "title": "Width"
+        },
+        "height": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Rectangle height when this shape is an RC record.",
+          "title": "Height"
+        },
+        "radius": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Circle radius when this shape is a CR record.",
+          "title": "Radius"
+        },
+        "size": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Square size value when this shape is an SQ record.",
+          "title": "Size"
+        },
+        "contours": {
+          "description": "Contour geometry for package surface shapes.",
+          "items": {
+            "$ref": "#/$defs/SurfaceContourModel"
+          },
+          "title": "Contours",
+          "type": "array"
+        }
+      },
+      "required": [
+        "line_number",
+        "kind"
+      ],
+      "title": "PackageShapeModel",
+      "type": "object"
+    },
+    "PointModel": {
+      "additionalProperties": false,
+      "properties": {
+        "x": {
+          "description": "X coordinate in the source ODB++ units.",
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "description": "Y coordinate in the source ODB++ units.",
+          "title": "Y",
+          "type": "number"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "title": "PointModel",
+      "type": "object"
+    },
+    "ProfileModel": {
+      "additionalProperties": false,
+      "properties": {
+        "units": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Units declared in the profile file when present.",
+          "title": "Units"
+        },
+        "records": {
+          "description": "Tokenized profile line records.",
+          "items": {
+            "$ref": "#/$defs/LineRecordModel"
+          },
+          "title": "Records",
+          "type": "array"
+        }
+      },
+      "title": "ProfileModel",
+      "type": "object"
+    },
+    "StepModel": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "ODB++ step name.",
+          "title": "Name",
+          "type": "string"
+        },
+        "profile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProfileModel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Step profile records when profile exists."
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "StepModel",
+      "type": "object"
+    },
+    "SurfaceContourModel": {
+      "additionalProperties": false,
+      "properties": {
+        "polarity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Surface contour polarity when present.",
+          "title": "Polarity"
+        },
+        "vertices": {
+          "description": "Contour vertices.",
+          "items": {
+            "$ref": "#/$defs/ContourVertexModel"
+          },
+          "title": "Vertices",
+          "type": "array"
+        }
+      },
+      "title": "SurfaceContourModel",
+      "type": "object"
+    },
+    "SymbolDefinitionModel": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "ODB++ symbol name from symbols/<name>/features.",
+          "title": "Name",
+          "type": "string"
+        },
+        "units": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Units declared in the symbol feature file when present.",
+          "title": "Units"
+        },
+        "features": {
+          "description": "Parsed symbol feature records.",
+          "items": {
+            "$ref": "#/$defs/FeatureModel"
+          },
+          "title": "Features",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "SymbolDefinitionModel",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "metadata": {
+      "$ref": "#/$defs/ODBPPMetadata",
+      "description": "High-level metadata about the parsed ODB++ source."
+    },
+    "summary": {
+      "$ref": "#/$defs/ODBPPSummary",
+      "description": "Fast counts and selected-step summary information."
+    },
+    "matrix": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MatrixModel"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "ODB++ matrix rows when matrix/matrix exists."
+    },
+    "steps": {
+      "description": "Discovered ODB++ steps and profiles.",
+      "items": {
+        "$ref": "#/$defs/StepModel"
+      },
+      "title": "Steps",
+      "type": "array"
+    },
+    "symbols": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/SymbolDefinitionModel"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "ODB++ symbol library feature definitions. Omitted in summary-only mode.",
+      "title": "Symbols"
+    },
+    "drill_tools": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/DrillLayerToolsModel"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Selected-step drill/rout layer tool definitions. Omitted in summary-only mode.",
+      "title": "Drill Tools"
+    },
+    "packages": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/PackageDefinitionModel"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Selected-step EDA package and package-pin definitions. Omitted in summary-only mode.",
+      "title": "Packages"
+    },
+    "layers": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/LayerFeaturesModel"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Selected-step layer features. Omitted in summary-only mode.",
+      "title": "Layers"
+    },
+    "components": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/ComponentModel"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Selected-step component records. Omitted in summary-only mode.",
+      "title": "Components"
+    },
+    "nets": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/NetModel"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Selected-step net records. Omitted in summary-only mode.",
+      "title": "Nets"
+    },
+    "diagnostics": {
+      "description": "Non-fatal parser diagnostics.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Diagnostics",
+      "type": "array"
+    }
+  },
+  "required": [
+    "metadata",
+    "summary"
+  ],
+  "title": "ODBLayout",
+  "type": "object"
+}

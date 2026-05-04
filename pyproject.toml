@@ -1,0 +1,69 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aurora-translator"
+version = "1.0.42"
+description = "Translate and export PCB layout data, starting with AEDB parsing."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pydantic>=2.12.0",
+    "pyedb>=0.72.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.15.12",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.format]
+indent-style = "space"
+line-ending = "lf"
+quote-style = "double"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[project.scripts]
+aurora-translator = "aurora_translator.cli:main"
+
+[tool.setuptools]
+packages = [
+    "aurora_translator",
+    "aurora_translator.cli",
+    "aurora_translator.pipeline",
+    "aurora_translator.semantic",
+    "aurora_translator.semantic.adapters",
+    "aurora_translator.shared",
+    "aurora_translator.sources",
+    "aurora_translator.sources.aedb",
+    "aurora_translator.sources.aedb.extractors",
+    "aurora_translator.sources.auroradb",
+    "aurora_translator.sources.odbpp",
+    "aurora_translator.targets",
+    "aurora_translator.targets.auroradb",
+    "aurora_translator.targets.auroradb.aaf",
+]
+
+[tool.setuptools.package-dir]
+aurora_translator = "."
+"aurora_translator.cli" = "cli"
+"aurora_translator.pipeline" = "pipeline"
+"aurora_translator.semantic" = "semantic"
+"aurora_translator.semantic.adapters" = "semantic/adapters"
+"aurora_translator.shared" = "shared"
+"aurora_translator.sources" = "sources"
+"aurora_translator.sources.aedb" = "sources/aedb"
+"aurora_translator.sources.aedb.extractors" = "sources/aedb/extractors"
+"aurora_translator.sources.auroradb" = "sources/auroradb"
+"aurora_translator.sources.odbpp" = "sources/odbpp"
+"aurora_translator.targets" = "targets"
+"aurora_translator.targets.auroradb" = "targets/auroradb"
+"aurora_translator.targets.auroradb.aaf" = "targets/auroradb/aaf"

@@ -1,0 +1,2 @@
+PROJECT_VERSION = "1.0.42"
+__version__ = PROJECT_VERSION

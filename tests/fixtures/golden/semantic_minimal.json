@@ -1,0 +1,95 @@
+{
+  "metadata": {
+    "source_format": "odbpp",
+    "source": "<fixture>/minimal.tgz",
+    "source_step": "main",
+    "source_parser_version": "0.6.3",
+    "source_schema_version": "0.6.0"
+  },
+  "units": "MM",
+  "summary": {
+    "layer_count": 1,
+    "material_count": 0,
+    "shape_count": 0,
+    "via_template_count": 0,
+    "net_count": 1,
+    "component_count": 0,
+    "footprint_count": 0,
+    "pin_count": 0,
+    "pad_count": 0,
+    "via_count": 0,
+    "primitive_count": 1,
+    "edge_count": 0,
+    "diagnostic_count": 0
+  },
+  "layers": [
+    {
+      "id": "layer.top",
+      "name": "TOP",
+      "layer_type": "signal",
+      "role": "signal",
+      "side": "top",
+      "order_index": 0,
+      "source": {
+        "source_format": "odbpp",
+        "path": "matrix.rows[0]",
+        "raw_id": "TOP"
+      }
+    }
+  ],
+  "materials": [],
+  "shapes": [],
+  "via_templates": [],
+  "nets": [
+    {
+      "id": "net.gnd",
+      "name": "GND",
+      "primitive_ids": [
+        "primitive.trace.1"
+      ],
+      "source": {
+        "source_format": "odbpp",
+        "path": "nets[0]",
+        "raw_id": "GND"
+      }
+    }
+  ],
+  "components": [],
+  "footprints": [],
+  "pins": [],
+  "pads": [],
+  "vias": [],
+  "primitives": [
+    {
+      "id": "primitive.trace.1",
+      "kind": "trace",
+      "layer_name": "TOP",
+      "net_id": "net.gnd",
+      "geometry": {
+        "width": 0.15,
+        "center_line": [
+          [
+            0.0,
+            0.0
+          ],
+          [
+            1.0,
+            0.0
+          ]
+        ],
+        "source": "golden"
+      },
+      "source": {
+        "source_format": "odbpp",
+        "path": "layers[0].features[0]",
+        "raw_id": "0"
+      }
+    }
+  ],
+  "connectivity": [],
+  "diagnostics": [],
+  "board_outline": {
+    "source": "golden",
+    "path_count": 0
+  }
+}

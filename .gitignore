@@ -1,0 +1,27 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv
+
+# Rust-generated files
+crates/**/target/
+
+# Parser outputs
+out/
+logs/
+
+# Local environment overrides
+.env
+.env.*
+*.log

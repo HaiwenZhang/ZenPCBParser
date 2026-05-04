@@ -1,0 +1,2704 @@
+{
+  "$defs": {
+    "ConnectivityEdge": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "description": "Connectivity edge kind.",
+          "enum": [
+            "component-footprint",
+            "component-pin",
+            "component-pad",
+            "footprint-pad",
+            "pin-pad",
+            "pad-net",
+            "pin-net",
+            "via-net",
+            "primitive-net",
+            "component-primitive"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "source_id": {
+          "description": "Source semantic object id.",
+          "title": "Source Id",
+          "type": "string"
+        },
+        "target_id": {
+          "description": "Target semantic object id.",
+          "title": "Target Id",
+          "type": "string"
+        },
+        "confidence": {
+          "default": 1.0,
+          "description": "Confidence in the inferred edge.",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Confidence",
+          "type": "number"
+        }
+      },
+      "required": [
+        "kind",
+        "source_id",
+        "target_id"
+      ],
+      "title": "ConnectivityEdge",
+      "type": "object"
+    },
+    "SemanticArcGeometry": {
+      "additionalProperties": true,
+      "properties": {
+        "start": {
+          "anyOf": [
+            {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Arc start point.",
+          "title": "Start"
+        },
+        "end": {
+          "anyOf": [
+            {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Arc end point.",
+          "title": "End"
+        },
+        "center": {
+          "anyOf": [
+            {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Arc center point.",
+          "title": "Center"
+        },
+        "mid_point": {
+          "anyOf": [
+            {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Arc midpoint.",
+          "title": "Mid Point"
+        },
+        "height": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Arc height.",
+          "title": "Height"
+        },
+        "radius": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Arc radius.",
+          "title": "Radius"
+        },
+        "length": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Arc length.",
+          "title": "Length"
+        },
+        "is_segment": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether the arc is a straight segment.",
+          "title": "Is Segment"
+        },
+        "is_point": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether the arc degenerates to a point.",
+          "title": "Is Point"
+        },
+        "is_ccw": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether the arc direction is counter-clockwise.",
+          "title": "Is Ccw"
+        }
+      },
+      "title": "SemanticArcGeometry",
+      "type": "object"
+    },
+    "SemanticBoardOutlineGeometry": {
+      "additionalProperties": true,
+      "properties": {
+        "kind": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Board outline geometry kind.",
+          "title": "Kind"
+        },
+        "auroradb_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "AuroraDB-compatible geometry type.",
+          "title": "Auroradb Type"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Source of board outline geometry.",
+          "title": "Source"
+        },
+        "path_count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Number of source outline paths.",
+          "title": "Path Count"
+        },
+        "values": {
+          "description": "Outline geometry values.",
+          "items": {},
+          "title": "Values",
+          "type": "array"
+        }
+      },
+      "title": "SemanticBoardOutlineGeometry",
+      "type": "object"
+    },
+    "SemanticComponent": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "Stable semantic component id.",
+          "title": "Id",
+          "type": "string"
+        },
+        "refdes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Reference designator.",
+          "title": "Refdes"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Component instance name.",
+          "title": "Name"
+        },
+        "part_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Part name.",
+          "title": "Part Name"
+        },
+        "package_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Package or footprint name.",
+          "title": "Package Name"
+        },
+        "footprint_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Resolved semantic footprint id.",
+          "title": "Footprint Id"
+        },
+        "layer_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Placement layer name.",
+          "title": "Layer Name"
+        },
+        "side": {
+          "anyOf": [
+            {
+              "enum": [
+                "top",
+                "bottom",
+                "internal"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Mounted side when known.",
+          "title": "Side"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Component value when known.",
+          "title": "Value"
+        },
+        "location": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SemanticPoint"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Component placement point when known."
+        },
+        "rotation": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Component rotation when known.",
+          "title": "Rotation"
+        },
+        "attributes": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Format-specific component or part attributes.",
+          "title": "Attributes",
+          "type": "object"
+        },
+        "pin_ids": {
+          "description": "Pins owned by this component.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Pin Ids",
+          "type": "array"
+        },
+        "pad_ids": {
+          "description": "Pads placed for this component.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Pad Ids",
+          "type": "array"
+        },
+        "source": {
+          "$ref": "#/$defs/SourceRef",
+          "description": "Source field reference."
+        }
+      },
+      "required": [
+        "id",
+        "source"
+      ],
+      "title": "SemanticComponent",
+      "type": "object"
+    },
+    "SemanticDiagnostic": {
+      "additionalProperties": false,
+      "properties": {
+        "severity": {
+          "default": "warning",
+          "description": "Diagnostic severity.",
+          "enum": [
+            "info",
+            "warning",
+            "error"
+          ],
+          "title": "Severity",
+          "type": "string"
+        },
+        "code": {
+          "description": "Stable diagnostic code.",
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "description": "Human-readable diagnostic message.",
+          "title": "Message",
+          "type": "string"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SourceRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Source field associated with the diagnostic."
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "title": "SemanticDiagnostic",
+      "type": "object"
+    },
+    "SemanticFootprint": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "Stable semantic footprint id.",
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "description": "Footprint or package name.",
+          "title": "Name",
+          "type": "string"
+        },
+        "part_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Part name associated with this footprint when known.",
+          "title": "Part Name"
+        },
+        "attributes": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Format-specific footprint or package attributes.",
+          "title": "Attributes",
+          "type": "object"
+        },
+        "pad_ids": {
+          "description": "Pads belonging to this footprint.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Pad Ids",
+          "type": "array"
+        },
+        "geometry": {
+          "$ref": "#/$defs/SemanticFootprintGeometry",
+          "description": "Typed format-neutral footprint/package geometry hints."
+        },
+        "source": {
+          "$ref": "#/$defs/SourceRef",
+          "description": "Source field reference."
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "source"
+      ],
+      "title": "SemanticFootprint",
+      "type": "object"
+    },
+    "SemanticFootprintGeometry": {
+      "additionalProperties": true,
+      "properties": {
+        "outlines": {
+          "description": "Package or footprint body outlines.",
+          "items": {},
+          "title": "Outlines",
+          "type": "array"
+        },
+        "pads": {
+          "description": "Package-local pad geometry hints.",
+          "items": {},
+          "title": "Pads",
+          "type": "array"
+        }
+      },
+      "title": "SemanticFootprintGeometry",
+      "type": "object"
+    },
+    "SemanticLayer": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "Stable semantic layer id.",
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "description": "Layer name.",
+          "title": "Name",
+          "type": "string"
+        },
+        "layer_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Source or normalized layer type.",
+          "title": "Layer Type"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Semantic role such as signal, dielectric, plane, or drill.",
+          "title": "Role"
+        },
+        "side": {
+          "anyOf": [
+            {
+              "enum": [
+                "top",
+                "bottom",
+                "internal"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Board side when known.",
+          "title": "Side"
+        },
+        "order_index": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Stack order index when known.",
+          "title": "Order Index"
+        },
+        "material": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Primary material when known.",
+          "title": "Material"
+        },
+        "material_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Referenced semantic material id for the primary material.",
+          "title": "Material Id"
+        },
+        "fill_material": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Fill material when known.",
+          "title": "Fill Material"
+        },
+        "fill_material_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Referenced semantic material id for the fill material.",
+          "title": "Fill Material Id"
+        },
+        "thickness": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Layer thickness when known.",
+          "title": "Thickness"
+        },
+        "source": {
+          "$ref": "#/$defs/SourceRef",
+          "description": "Source field reference."
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "source"
+      ],
+      "title": "SemanticLayer",
+      "type": "object"
+    },
+    "SemanticMaterial": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "Stable semantic material id.",
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "description": "Material name.",
+          "title": "Name",
+          "type": "string"
+        },
+        "role": {
+          "default": "unknown",
+          "description": "Material role in the stackup.",
+          "enum": [
+            "metal",
+            "dielectric",
+            "unknown"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "conductivity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Electrical conductivity when known.",
+          "title": "Conductivity"
+        },
+        "permittivity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Relative permittivity when known.",
+          "title": "Permittivity"
+        },
+        "dielectric_loss_tangent": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Dielectric loss tangent when known.",
+          "title": "Dielectric Loss Tangent"
+        },
+        "source": {
+          "$ref": "#/$defs/SourceRef",
+          "description": "Source field reference."
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "source"
+      ],
+      "title": "SemanticMaterial",
+      "type": "object"
+    },
+    "SemanticMetadata": {
+      "additionalProperties": false,
+      "properties": {
+        "project_version": {
+          "default": "1.0.42",
+          "description": "Aurora Translator project version.",
+          "title": "Project Version",
+          "type": "string"
+        },
+        "parser_version": {
+          "default": "0.7.1",
+          "description": "Semantic parser version that produced this payload.",
+          "title": "Parser Version",
+          "type": "string"
+        },
+        "output_schema_version": {
+          "default": "0.7.0",
+          "description": "Semantic JSON schema version.",
+          "title": "Output Schema Version",
+          "type": "string"
+        },
+        "source_format": {
+          "description": "Source payload format.",
+          "enum": [
+            "aedb",
+            "auroradb",
+            "odbpp"
+          ],
+          "title": "Source Format",
+          "type": "string"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Source path recorded by the source payload.",
+          "title": "Source"
+        },
+        "source_step": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Source step when the format has a step concept.",
+          "title": "Source Step"
+        },
+        "source_parser_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Parser version of the source payload.",
+          "title": "Source Parser Version"
+        },
+        "source_schema_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "JSON schema version of the source payload.",
+          "title": "Source Schema Version"
+        }
+      },
+      "required": [
+        "source_format"
+      ],
+      "title": "SemanticMetadata",
+      "type": "object"
+    },
+    "SemanticNet": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "Stable semantic net id.",
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "description": "Net name.",
+          "title": "Name",
+          "type": "string"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Semantic role such as power, ground, signal, or unknown.",
+          "title": "Role"
+        },
+        "pin_ids": {
+          "description": "Pins connected to this net.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Pin Ids",
+          "type": "array"
+        },
+        "pad_ids": {
+          "description": "Pads connected to this net.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Pad Ids",
+          "type": "array"
+        },
+        "via_ids": {
+          "description": "Vias connected to this net.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Via Ids",
+          "type": "array"
+        },
+        "primitive_ids": {
+          "description": "Primitives connected to this net.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Primitive Ids",
+          "type": "array"
+        },
+        "source": {
+          "$ref": "#/$defs/SourceRef",
+          "description": "Source field reference."
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "source"
+      ],
+      "title": "SemanticNet",
+      "type": "object"
+    },
+    "SemanticPad": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "Stable semantic pad id.",
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Pad name, number, or source pad id.",
+          "title": "Name"
+        },
+        "footprint_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Owning footprint id when known.",
+          "title": "Footprint Id"
+        },
+        "component_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Owning component id when this is a placed pad.",
+          "title": "Component Id"
+        },
+        "pin_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Bound semantic pin id when known.",
+          "title": "Pin Id"
+        },
+        "net_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Connected net id when known.",
+          "title": "Net Id"
+        },
+        "layer_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Pad layer name when known.",
+          "title": "Layer Name"
+        },
+        "position": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SemanticPoint"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Pad position when known."
+        },
+        "padstack_definition": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Padstack definition or pad template when known.",
+          "title": "Padstack Definition"
+        },
+        "geometry": {
+          "$ref": "#/$defs/SemanticPadGeometry",
+          "description": "Typed format-neutral pad geometry hints."
+        },
+        "source": {
+          "$ref": "#/$defs/SourceRef",
+          "description": "Source field reference."
+        }
+      },
+      "required": [
+        "id",
+        "source"
+      ],
+      "title": "SemanticPad",
+      "type": "object"
+    },
+    "SemanticPadGeometry": {
+      "additionalProperties": true,
+      "properties": {
+        "shape_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Referenced semantic shape id.",
+          "title": "Shape Id"
+        },
+        "package": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Source package name.",
+          "title": "Package"
+        },
+        "package_pin": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Source package pin name.",
+          "title": "Package Pin"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Source of pad geometry hints.",
+          "title": "Source"
+        },
+        "rotation": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Pad rotation.",
+          "title": "Rotation"
+        },
+        "shape_kind": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Source shape kind.",
+          "title": "Shape Kind"
+        },
+        "polarity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Source pad polarity.",
+          "title": "Polarity"
+        },
+        "mirror_x": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether pad geometry mirrors across local X.",
+          "title": "Mirror X"
+        },
+        "mirror_y": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether pad geometry mirrors across local Y.",
+          "title": "Mirror Y"
+        }
+      },
+      "title": "SemanticPadGeometry",
+      "type": "object"
+    },
+    "SemanticPin": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "Stable semantic pin id.",
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Pin name or number.",
+          "title": "Name"
+        },
+        "component_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Owning component id.",
+          "title": "Component Id"
+        },
+        "net_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Connected net id.",
+          "title": "Net Id"
+        },
+        "pad_ids": {
+          "description": "Pads bound to this pin.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Pad Ids",
+          "type": "array"
+        },
+        "layer_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Placement layer name.",
+          "title": "Layer Name"
+        },
+        "position": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SemanticPoint"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Pin position when known."
+        },
+        "source": {
+          "$ref": "#/$defs/SourceRef",
+          "description": "Source field reference."
+        }
+      },
+      "required": [
+        "id",
+        "source"
+      ],
+      "title": "SemanticPin",
+      "type": "object"
+    },
+    "SemanticPoint": {
+      "additionalProperties": false,
+      "properties": {
+        "x": {
+          "description": "X coordinate in semantic board units.",
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "description": "Y coordinate in semantic board units.",
+          "title": "Y",
+          "type": "number"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "title": "SemanticPoint",
+      "type": "object"
+    },
+    "SemanticPolygonVoidGeometry": {
+      "additionalProperties": true,
+      "properties": {
+        "raw_points": {
+          "description": "Void outline points.",
+          "items": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array"
+          },
+          "title": "Raw Points",
+          "type": "array"
+        },
+        "arcs": {
+          "description": "Void arc segments.",
+          "items": {
+            "$ref": "#/$defs/SemanticArcGeometry"
+          },
+          "title": "Arcs",
+          "type": "array"
+        },
+        "bbox": {
+          "anyOf": [
+            {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Void bounding box.",
+          "title": "Bbox"
+        },
+        "area": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Void area.",
+          "title": "Area"
+        },
+        "polarity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Source contour polarity.",
+          "title": "Polarity"
+        },
+        "source_contour_index": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Source contour index.",
+          "title": "Source Contour Index"
+        }
+      },
+      "title": "SemanticPolygonVoidGeometry",
+      "type": "object"
+    },
+    "SemanticPrimitive": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "Stable semantic primitive id.",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "description": "Semantic primitive kind such as trace, polygon, pad, via, or raw_feature.",
+          "title": "Kind",
+          "type": "string"
+        },
+        "layer_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Owning layer name.",
+          "title": "Layer Name"
+        },
+        "net_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Connected net id when known.",
+          "title": "Net Id"
+        },
+        "component_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Owning component id when known.",
+          "title": "Component Id"
+        },
+        "geometry": {
+          "$ref": "#/$defs/SemanticPrimitiveGeometry",
+          "description": "Typed format-neutral primitive geometry hints."
+        },
+        "source": {
+          "$ref": "#/$defs/SourceRef",
+          "description": "Source field reference."
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "source"
+      ],
+      "title": "SemanticPrimitive",
+      "type": "object"
+    },
+    "SemanticPrimitiveGeometry": {
+      "additionalProperties": true,
+      "properties": {
+        "record_kind": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Source primitive record kind.",
+          "title": "Record Kind"
+        },
+        "feature_index": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Source feature index.",
+          "title": "Feature Index"
+        },
+        "feature_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Source feature id.",
+          "title": "Feature Id"
+        },
+        "line_number": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Source line number.",
+          "title": "Line Number"
+        },
+        "tokens": {
+          "description": "Source feature tokens.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Tokens",
+          "type": "array"
+        },
+        "polarity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Source polarity.",
+          "title": "Polarity"
+        },
+        "symbol": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Source symbol name.",
+          "title": "Symbol"
+        },
+        "shape_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Referenced semantic shape id.",
+          "title": "Shape Id"
+        },
+        "dcode": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Source D-code.",
+          "title": "Dcode"
+        },
+        "orientation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Source orientation token.",
+          "title": "Orientation"
+        },
+        "rotation": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Primitive rotation.",
+          "title": "Rotation"
+        },
+        "mirror_x": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether primitive geometry mirrors across local X.",
+          "title": "Mirror X"
+        },
+        "mirror_y": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether primitive geometry mirrors across local Y.",
+          "title": "Mirror Y"
+        },
+        "start": {
+          "default": null,
+          "description": "Start point or source start geometry.",
+          "title": "Start"
+        },
+        "end": {
+          "default": null,
+          "description": "End point or source end geometry.",
+          "title": "End"
+        },
+        "center": {
+          "default": null,
+          "description": "Center point.",
+          "title": "Center"
+        },
+        "location": {
+          "default": null,
+          "description": "Placement location.",
+          "title": "Location"
+        },
+        "width": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Trace or arc width.",
+          "title": "Width"
+        },
+        "center_line": {
+          "description": "Trace center line.",
+          "items": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array"
+          },
+          "title": "Center Line",
+          "type": "array"
+        },
+        "raw_points": {
+          "description": "Polygon outline points.",
+          "items": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array"
+          },
+          "title": "Raw Points",
+          "type": "array"
+        },
+        "arcs": {
+          "description": "Polygon arc segments.",
+          "items": {
+            "$ref": "#/$defs/SemanticArcGeometry"
+          },
+          "title": "Arcs",
+          "type": "array"
+        },
+        "voids": {
+          "description": "Polygon void geometry.",
+          "items": {
+            "$ref": "#/$defs/SemanticPolygonVoidGeometry"
+          },
+          "title": "Voids",
+          "type": "array"
+        },
+        "has_voids": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether polygon geometry has voids.",
+          "title": "Has Voids"
+        },
+        "void_ids": {
+          "description": "Source polygon void identifiers.",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ]
+          },
+          "title": "Void Ids",
+          "type": "array"
+        },
+        "surface_group_index": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Split surface group index.",
+          "title": "Surface Group Index"
+        },
+        "surface_group_count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Split surface group count.",
+          "title": "Surface Group Count"
+        },
+        "is_negative": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether polygon polarity is negative.",
+          "title": "Is Negative"
+        },
+        "is_void": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether polygon geometry is itself a void.",
+          "title": "Is Void"
+        },
+        "bbox": {
+          "anyOf": [
+            {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Primitive bounding box.",
+          "title": "Bbox"
+        },
+        "area": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Primitive area.",
+          "title": "Area"
+        },
+        "clockwise": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether arc direction is clockwise.",
+          "title": "Clockwise"
+        },
+        "is_ccw": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether arc direction is counter-clockwise.",
+          "title": "Is Ccw"
+        }
+      },
+      "title": "SemanticPrimitiveGeometry",
+      "type": "object"
+    },
+    "SemanticShape": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "Stable semantic shape id.",
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Shape name or source label when known.",
+          "title": "Name"
+        },
+        "kind": {
+          "description": "Semantic shape kind such as circle, rectangle, rounded_rectangle, or polygon.",
+          "title": "Kind",
+          "type": "string"
+        },
+        "auroradb_type": {
+          "description": "AuroraDB geometry item name such as Circle or Rectangle.",
+          "title": "Auroradb Type",
+          "type": "string"
+        },
+        "values": {
+          "description": "Geometry values in semantic board units, following AuroraDB geometry order.",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "integer"
+              }
+            ]
+          },
+          "title": "Values",
+          "type": "array"
+        },
+        "source": {
+          "$ref": "#/$defs/SourceRef",
+          "description": "Source field reference."
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "auroradb_type",
+        "source"
+      ],
+      "title": "SemanticShape",
+      "type": "object"
+    },
+    "SemanticSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "layer_count": {
+          "default": 0,
+          "description": "Number of semantic layers.",
+          "minimum": 0,
+          "title": "Layer Count",
+          "type": "integer"
+        },
+        "material_count": {
+          "default": 0,
+          "description": "Number of semantic material definitions.",
+          "minimum": 0,
+          "title": "Material Count",
+          "type": "integer"
+        },
+        "shape_count": {
+          "default": 0,
+          "description": "Number of semantic shape definitions.",
+          "minimum": 0,
+          "title": "Shape Count",
+          "type": "integer"
+        },
+        "via_template_count": {
+          "default": 0,
+          "description": "Number of semantic via templates.",
+          "minimum": 0,
+          "title": "Via Template Count",
+          "type": "integer"
+        },
+        "net_count": {
+          "default": 0,
+          "description": "Number of semantic nets.",
+          "minimum": 0,
+          "title": "Net Count",
+          "type": "integer"
+        },
+        "component_count": {
+          "default": 0,
+          "description": "Number of semantic components.",
+          "minimum": 0,
+          "title": "Component Count",
+          "type": "integer"
+        },
+        "footprint_count": {
+          "default": 0,
+          "description": "Number of semantic footprints.",
+          "minimum": 0,
+          "title": "Footprint Count",
+          "type": "integer"
+        },
+        "pin_count": {
+          "default": 0,
+          "description": "Number of semantic pins.",
+          "minimum": 0,
+          "title": "Pin Count",
+          "type": "integer"
+        },
+        "pad_count": {
+          "default": 0,
+          "description": "Number of semantic pads.",
+          "minimum": 0,
+          "title": "Pad Count",
+          "type": "integer"
+        },
+        "via_count": {
+          "default": 0,
+          "description": "Number of semantic vias.",
+          "minimum": 0,
+          "title": "Via Count",
+          "type": "integer"
+        },
+        "primitive_count": {
+          "default": 0,
+          "description": "Number of semantic primitives.",
+          "minimum": 0,
+          "title": "Primitive Count",
+          "type": "integer"
+        },
+        "edge_count": {
+          "default": 0,
+          "description": "Number of semantic connectivity edges.",
+          "minimum": 0,
+          "title": "Edge Count",
+          "type": "integer"
+        },
+        "diagnostic_count": {
+          "default": 0,
+          "description": "Number of semantic diagnostics.",
+          "minimum": 0,
+          "title": "Diagnostic Count",
+          "type": "integer"
+        }
+      },
+      "title": "SemanticSummary",
+      "type": "object"
+    },
+    "SemanticVia": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "Stable semantic via id.",
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Via instance name when known.",
+          "title": "Name"
+        },
+        "template_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Referenced semantic via template id.",
+          "title": "Template Id"
+        },
+        "net_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Connected net id.",
+          "title": "Net Id"
+        },
+        "layer_names": {
+          "description": "Layers traversed by the via.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Layer Names",
+          "type": "array"
+        },
+        "position": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SemanticPoint"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Via position when known."
+        },
+        "geometry": {
+          "$ref": "#/$defs/SemanticViaGeometry",
+          "description": "Typed format-neutral via geometry hints."
+        },
+        "source": {
+          "$ref": "#/$defs/SourceRef",
+          "description": "Source field reference."
+        }
+      },
+      "required": [
+        "id",
+        "source"
+      ],
+      "title": "SemanticVia",
+      "type": "object"
+    },
+    "SemanticViaGeometry": {
+      "additionalProperties": true,
+      "properties": {
+        "rotation": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Via rotation.",
+          "title": "Rotation"
+        },
+        "template_refined_from": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Original via template before refinement.",
+          "title": "Template Refined From"
+        },
+        "matched_signal_layer_count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Matched signal-layer pad count.",
+          "title": "Matched Signal Layer Count"
+        },
+        "matched_antipad_layer_count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Matched antipad layer count.",
+          "title": "Matched Antipad Layer Count"
+        }
+      },
+      "title": "SemanticViaGeometry",
+      "type": "object"
+    },
+    "SemanticViaTemplate": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "Stable semantic via template id.",
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "description": "Via or padstack template name.",
+          "title": "Name",
+          "type": "string"
+        },
+        "barrel_shape_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Semantic shape id for the barrel or drill hole.",
+          "title": "Barrel Shape Id"
+        },
+        "layer_pads": {
+          "description": "Layer-specific pad, antipad, and thermal-pad shape references.",
+          "items": {
+            "$ref": "#/$defs/SemanticViaTemplateLayer"
+          },
+          "title": "Layer Pads",
+          "type": "array"
+        },
+        "geometry": {
+          "$ref": "#/$defs/SemanticViaTemplateGeometry",
+          "description": "Typed format-neutral via/padstack geometry hints."
+        },
+        "source": {
+          "$ref": "#/$defs/SourceRef",
+          "description": "Source field reference."
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "source"
+      ],
+      "title": "SemanticViaTemplate",
+      "type": "object"
+    },
+    "SemanticViaTemplateGeometry": {
+      "additionalProperties": true,
+      "properties": {
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Source of via-template geometry hints.",
+          "title": "Source"
+        },
+        "drill_layer": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Source drill layer name.",
+          "title": "Drill Layer"
+        },
+        "symbol": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Source drill or pad symbol.",
+          "title": "Symbol"
+        },
+        "tool": {
+          "default": null,
+          "description": "Source drill tool metadata.",
+          "title": "Tool"
+        },
+        "layer_pad_rotations": {
+          "additionalProperties": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "description": "Per-layer pad and antipad rotations.",
+          "title": "Layer Pad Rotations",
+          "type": "object"
+        },
+        "layer_pad_source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "How layer pad geometry was refined.",
+          "title": "Layer Pad Source"
+        },
+        "antipad_source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "How antipad geometry was refined.",
+          "title": "Antipad Source"
+        },
+        "matched_signal_layer_count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Matched signal-layer pad count.",
+          "title": "Matched Signal Layer Count"
+        },
+        "matched_antipad_layer_count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Matched antipad layer count.",
+          "title": "Matched Antipad Layer Count"
+        }
+      },
+      "title": "SemanticViaTemplateGeometry",
+      "type": "object"
+    },
+    "SemanticViaTemplateLayer": {
+      "additionalProperties": false,
+      "properties": {
+        "layer_name": {
+          "description": "Layer name for this via-template pad entry.",
+          "title": "Layer Name",
+          "type": "string"
+        },
+        "pad_shape_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Semantic shape id for the regular pad.",
+          "title": "Pad Shape Id"
+        },
+        "antipad_shape_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Semantic shape id for the antipad.",
+          "title": "Antipad Shape Id"
+        },
+        "thermal_shape_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Semantic shape id for the thermal pad.",
+          "title": "Thermal Shape Id"
+        }
+      },
+      "required": [
+        "layer_name"
+      ],
+      "title": "SemanticViaTemplateLayer",
+      "type": "object"
+    },
+    "SourceRef": {
+      "additionalProperties": false,
+      "properties": {
+        "source_format": {
+          "description": "Source payload format.",
+          "enum": [
+            "aedb",
+            "auroradb",
+            "odbpp"
+          ],
+          "title": "Source Format",
+          "type": "string"
+        },
+        "path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Path to the source field inside the format payload.",
+          "title": "Path"
+        },
+        "raw_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Original source identifier when available.",
+          "title": "Raw Id"
+        }
+      },
+      "required": [
+        "source_format"
+      ],
+      "title": "SourceRef",
+      "type": "object"
+    }
+  },
+  "$id": "https://aurora-translator.local/schemas/semantic-0.7.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Format-neutral semantic view derived from a format-specific payload.",
+  "properties": {
+    "metadata": {
+      "$ref": "#/$defs/SemanticMetadata",
+      "description": "Semantic payload metadata."
+    },
+    "units": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Canonical coordinate units for semantic points.",
+      "title": "Units"
+    },
+    "summary": {
+      "$ref": "#/$defs/SemanticSummary",
+      "description": "Semantic payload summary counts."
+    },
+    "layers": {
+      "description": "Semantic layers.",
+      "items": {
+        "$ref": "#/$defs/SemanticLayer"
+      },
+      "title": "Layers",
+      "type": "array"
+    },
+    "materials": {
+      "description": "Semantic material definitions.",
+      "items": {
+        "$ref": "#/$defs/SemanticMaterial"
+      },
+      "title": "Materials",
+      "type": "array"
+    },
+    "shapes": {
+      "description": "AuroraDB-profile semantic shapes.",
+      "items": {
+        "$ref": "#/$defs/SemanticShape"
+      },
+      "title": "Shapes",
+      "type": "array"
+    },
+    "via_templates": {
+      "description": "AuroraDB-profile semantic via templates.",
+      "items": {
+        "$ref": "#/$defs/SemanticViaTemplate"
+      },
+      "title": "Via Templates",
+      "type": "array"
+    },
+    "nets": {
+      "description": "Semantic nets.",
+      "items": {
+        "$ref": "#/$defs/SemanticNet"
+      },
+      "title": "Nets",
+      "type": "array"
+    },
+    "components": {
+      "description": "Semantic components.",
+      "items": {
+        "$ref": "#/$defs/SemanticComponent"
+      },
+      "title": "Components",
+      "type": "array"
+    },
+    "footprints": {
+      "description": "Semantic footprints.",
+      "items": {
+        "$ref": "#/$defs/SemanticFootprint"
+      },
+      "title": "Footprints",
+      "type": "array"
+    },
+    "pins": {
+      "description": "Semantic pins.",
+      "items": {
+        "$ref": "#/$defs/SemanticPin"
+      },
+      "title": "Pins",
+      "type": "array"
+    },
+    "pads": {
+      "description": "Semantic pads.",
+      "items": {
+        "$ref": "#/$defs/SemanticPad"
+      },
+      "title": "Pads",
+      "type": "array"
+    },
+    "vias": {
+      "description": "Semantic vias.",
+      "items": {
+        "$ref": "#/$defs/SemanticVia"
+      },
+      "title": "Vias",
+      "type": "array"
+    },
+    "primitives": {
+      "description": "Semantic primitives.",
+      "items": {
+        "$ref": "#/$defs/SemanticPrimitive"
+      },
+      "title": "Primitives",
+      "type": "array"
+    },
+    "connectivity": {
+      "description": "Semantic connectivity edges.",
+      "items": {
+        "$ref": "#/$defs/ConnectivityEdge"
+      },
+      "title": "Connectivity",
+      "type": "array"
+    },
+    "diagnostics": {
+      "description": "Semantic diagnostics.",
+      "items": {
+        "$ref": "#/$defs/SemanticDiagnostic"
+      },
+      "title": "Diagnostics",
+      "type": "array"
+    },
+    "board_outline": {
+      "$ref": "#/$defs/SemanticBoardOutlineGeometry",
+      "description": "Typed format-neutral board outline/profile geometry hints."
+    }
+  },
+  "required": [
+    "metadata",
+    "summary"
+  ],
+  "title": "SemanticBoard",
+  "type": "object"
+}

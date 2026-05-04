@@ -1,0 +1,3512 @@
+{
+  "$defs": {
+    "AEDBMetadata": {
+      "additionalProperties": false,
+      "properties": {
+        "project_version": {
+          "description": "Aurora Translator project version that produced this AEDB payload.",
+          "title": "Project Version",
+          "type": "string"
+        },
+        "parser_version": {
+          "description": "AEDB parser version that produced this AEDB payload.",
+          "title": "Parser Version",
+          "type": "string"
+        },
+        "output_schema_version": {
+          "description": "AEDB JSON schema version for this payload.",
+          "title": "Output Schema Version",
+          "type": "string"
+        },
+        "source": {
+          "description": "Source .aedb directory path.",
+          "title": "Source",
+          "type": "string"
+        },
+        "layout_name": {
+          "description": "Resolved layout name.",
+          "title": "Layout Name",
+          "type": "string"
+        },
+        "backend": {
+          "const": "dotnet",
+          "description": "PyEDB backend used for parsing.",
+          "title": "Backend",
+          "type": "string"
+        },
+        "pyedb_version": {
+          "description": "Installed PyEDB version.",
+          "title": "Pyedb Version",
+          "type": "string"
+        },
+        "aedt_version": {
+          "description": "AEDT version passed into PyEDB.",
+          "title": "Aedt Version",
+          "type": "string"
+        },
+        "read_only": {
+          "description": "Whether the layout was opened in read-only mode.",
+          "title": "Read Only",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "project_version",
+        "parser_version",
+        "output_schema_version",
+        "source",
+        "layout_name",
+        "backend",
+        "pyedb_version",
+        "aedt_version",
+        "read_only"
+      ],
+      "title": "AEDBMetadata",
+      "type": "object"
+    },
+    "ArcModel": {
+      "additionalProperties": false,
+      "properties": {
+        "start": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Arc start point.",
+          "title": "Start"
+        },
+        "end": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Arc end point.",
+          "title": "End"
+        },
+        "center": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Arc center point when available.",
+          "title": "Center"
+        },
+        "mid_point": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Arc midpoint when available.",
+          "title": "Mid Point"
+        },
+        "height": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Arc height.",
+          "title": "Height"
+        },
+        "radius": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Arc radius.",
+          "title": "Radius"
+        },
+        "length": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Arc length.",
+          "title": "Length"
+        },
+        "is_segment": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether the arc is actually a straight segment.",
+          "title": "Is Segment"
+        },
+        "is_point": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether the arc degenerates to a point.",
+          "title": "Is Point"
+        },
+        "is_ccw": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether the arc direction is counter-clockwise.",
+          "title": "Is Ccw"
+        }
+      },
+      "title": "ArcModel",
+      "type": "object"
+    },
+    "ComponentModel": {
+      "additionalProperties": false,
+      "properties": {
+        "refdes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Reference designator.",
+          "title": "Refdes"
+        },
+        "component_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Component instance name.",
+          "title": "Component Name"
+        },
+        "part_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Component part or footprint name.",
+          "title": "Part Name"
+        },
+        "type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/DisplayValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Component type.",
+          "title": "Type"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/DisplayValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Component value.",
+          "title": "Value"
+        },
+        "placement_layer": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Placement layer name.",
+          "title": "Placement Layer"
+        },
+        "location": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Component origin in meters.",
+          "title": "Location"
+        },
+        "center": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Component center in meters.",
+          "title": "Center"
+        },
+        "rotation": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Component rotation in radians.",
+          "title": "Rotation"
+        },
+        "bounding_box": {
+          "anyOf": [
+            {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Component bounding box as [xmin, ymin, xmax, ymax].",
+          "title": "Bounding Box"
+        },
+        "is_top_mounted": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether the component is top mounted.",
+          "title": "Is Top Mounted"
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether the component is enabled.",
+          "title": "Enabled"
+        },
+        "model_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/DisplayValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Assigned model type.",
+          "title": "Model Type"
+        },
+        "numpins": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Number of pins.",
+          "title": "Numpins"
+        },
+        "nets": {
+          "description": "Connected net names.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Nets",
+          "type": "array"
+        },
+        "pins": {
+          "description": "Resolved pins.",
+          "items": {
+            "$ref": "#/$defs/PinModel"
+          },
+          "title": "Pins",
+          "type": "array"
+        }
+      },
+      "title": "ComponentModel",
+      "type": "object"
+    },
+    "DisplayValue": {
+      "additionalProperties": false,
+      "description": "Numeric values that also preserve the original display string from PyEDB.",
+      "properties": {
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Numeric value in base units when PyEDB exposes one.",
+          "title": "Value"
+        },
+        "display": {
+          "description": "Original string representation returned by PyEDB.",
+          "title": "Display",
+          "type": "string"
+        }
+      },
+      "required": [
+        "display"
+      ],
+      "title": "DisplayValue",
+      "type": "object"
+    },
+    "EndCapStyleModel": {
+      "additionalProperties": false,
+      "properties": {
+        "valid": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether end cap data is valid.",
+          "title": "Valid"
+        },
+        "start": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Start end cap style.",
+          "title": "Start"
+        },
+        "end": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "End end cap style.",
+          "title": "End"
+        }
+      },
+      "title": "EndCapStyleModel",
+      "type": "object"
+    },
+    "LayerModel": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Layer name.",
+          "title": "Name"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Layer identifier.",
+          "title": "Id"
+        },
+        "type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/DisplayValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Layer type.",
+          "title": "Type"
+        },
+        "material": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Primary material name.",
+          "title": "Material"
+        },
+        "fill_material": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Fill material name.",
+          "title": "Fill Material"
+        },
+        "dielectric_fill": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Dielectric fill material name.",
+          "title": "Dielectric Fill"
+        },
+        "thickness": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/DisplayValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Layer thickness.",
+          "title": "Thickness"
+        },
+        "lower_elevation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/DisplayValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Lower elevation.",
+          "title": "Lower Elevation"
+        },
+        "upper_elevation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/DisplayValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Upper elevation.",
+          "title": "Upper Elevation"
+        },
+        "conductivity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/DisplayValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Layer conductivity.",
+          "title": "Conductivity"
+        },
+        "permittivity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/DisplayValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Layer permittivity.",
+          "title": "Permittivity"
+        },
+        "loss_tangent": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/DisplayValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Layer loss tangent.",
+          "title": "Loss Tangent"
+        },
+        "roughness_enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether roughness is enabled.",
+          "title": "Roughness Enabled"
+        },
+        "is_negative": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether the layer is negative.",
+          "title": "Is Negative"
+        },
+        "is_stackup_layer": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether it belongs to the stackup.",
+          "title": "Is Stackup Layer"
+        },
+        "is_via_layer": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether it is marked as a via layer.",
+          "title": "Is Via Layer"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "$ref": "#/$defs/DisplayValue"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Layer color channels.",
+          "title": "Color"
+        },
+        "transparency": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Layer transparency value.",
+          "title": "Transparency"
+        }
+      },
+      "title": "LayerModel",
+      "type": "object"
+    },
+    "LayoutSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "material_count": {
+          "description": "Number of material definitions.",
+          "title": "Material Count",
+          "type": "integer"
+        },
+        "layer_count": {
+          "description": "Number of stackup layers.",
+          "title": "Layer Count",
+          "type": "integer"
+        },
+        "net_count": {
+          "description": "Number of nets.",
+          "title": "Net Count",
+          "type": "integer"
+        },
+        "component_count": {
+          "description": "Number of components.",
+          "title": "Component Count",
+          "type": "integer"
+        },
+        "padstack_definition_count": {
+          "description": "Number of padstack definitions.",
+          "title": "Padstack Definition Count",
+          "type": "integer"
+        },
+        "padstack_instance_count": {
+          "description": "Number of padstack instances.",
+          "title": "Padstack Instance Count",
+          "type": "integer"
+        },
+        "primitive_count": {
+          "description": "Number of layout primitives.",
+          "title": "Primitive Count",
+          "type": "integer"
+        },
+        "primitive_type_counts": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "description": "Primitive counts grouped by primitive type name.",
+          "title": "Primitive Type Counts",
+          "type": "object"
+        },
+        "path_count": {
+          "description": "Number of path primitives.",
+          "title": "Path Count",
+          "type": "integer"
+        },
+        "polygon_count": {
+          "description": "Number of polygon primitives.",
+          "title": "Polygon Count",
+          "type": "integer"
+        },
+        "zone_primitive_count": {
+          "description": "Number of zone primitives.",
+          "title": "Zone Primitive Count",
+          "type": "integer"
+        },
+        "statistics": {
+          "$ref": "#/$defs/SummaryStatistics",
+          "description": "Statistics returned by PyEDB."
+        }
+      },
+      "required": [
+        "material_count",
+        "layer_count",
+        "net_count",
+        "component_count",
+        "padstack_definition_count",
+        "padstack_instance_count",
+        "primitive_count",
+        "path_count",
+        "polygon_count",
+        "zone_primitive_count",
+        "statistics"
+      ],
+      "title": "LayoutSummary",
+      "type": "object"
+    },
+    "MaterialModel": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Material name.",
+          "title": "Name"
+        },
+        "type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/DisplayValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Material type or PyEDB type string.",
+          "title": "Type"
+        },
+        "conductivity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/DisplayValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Conductivity.",
+          "title": "Conductivity"
+        },
+        "dc_conductivity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/DisplayValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "DC conductivity.",
+          "title": "Dc Conductivity"
+        },
+        "permittivity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/DisplayValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Relative permittivity.",
+          "title": "Permittivity"
+        },
+        "dc_permittivity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/DisplayValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "DC permittivity.",
+          "title": "Dc Permittivity"
+        },
+        "permeability": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/DisplayValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Relative permeability.",
+          "title": "Permeability"
+        },
+        "loss_tangent": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/DisplayValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Loss tangent.",
+          "title": "Loss Tangent"
+        },
+        "dielectric_loss_tangent": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/DisplayValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Dielectric loss tangent.",
+          "title": "Dielectric Loss Tangent"
+        },
+        "magnetic_loss_tangent": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/DisplayValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Magnetic loss tangent.",
+          "title": "Magnetic Loss Tangent"
+        },
+        "mass_density": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/DisplayValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Mass density.",
+          "title": "Mass Density"
+        },
+        "poisson_ratio": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/DisplayValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Poisson ratio.",
+          "title": "Poisson Ratio"
+        },
+        "specific_heat": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/DisplayValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Specific heat.",
+          "title": "Specific Heat"
+        },
+        "thermal_conductivity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/DisplayValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Thermal conductivity.",
+          "title": "Thermal Conductivity"
+        },
+        "thermal_expansion_coefficient": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/DisplayValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Thermal expansion coefficient.",
+          "title": "Thermal Expansion Coefficient"
+        },
+        "youngs_modulus": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/DisplayValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Young's modulus.",
+          "title": "Youngs Modulus"
+        },
+        "dielectric_model_frequency": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/DisplayValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Frequency used for dielectric model extraction when available.",
+          "title": "Dielectric Model Frequency"
+        }
+      },
+      "title": "MaterialModel",
+      "type": "object"
+    },
+    "NetModel": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Net name.",
+          "title": "Name"
+        },
+        "is_power_ground": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether the net is power or ground.",
+          "title": "Is Power Ground"
+        },
+        "component_count": {
+          "description": "Number of connected components.",
+          "title": "Component Count",
+          "type": "integer"
+        },
+        "primitive_count": {
+          "description": "Number of connected primitives.",
+          "title": "Primitive Count",
+          "type": "integer"
+        },
+        "padstack_instance_count": {
+          "description": "Number of connected padstack instances.",
+          "title": "Padstack Instance Count",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "component_count",
+        "primitive_count",
+        "padstack_instance_count"
+      ],
+      "title": "NetModel",
+      "type": "object"
+    },
+    "PadPropertyModel": {
+      "additionalProperties": false,
+      "properties": {
+        "pad_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Pad type enum or label.",
+          "title": "Pad Type"
+        },
+        "geometry_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Pad geometry enum or label.",
+          "title": "Geometry Type"
+        },
+        "shape": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/DisplayValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Pad shape descriptor.",
+          "title": "Shape"
+        },
+        "offset_x": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/DisplayValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Pad X offset.",
+          "title": "Offset X"
+        },
+        "offset_y": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/DisplayValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Pad Y offset.",
+          "title": "Offset Y"
+        },
+        "rotation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/DisplayValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Pad rotation.",
+          "title": "Rotation"
+        },
+        "parameters": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "$ref": "#/$defs/DisplayValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "description": "Geometry parameters keyed by parameter name.",
+          "title": "Parameters",
+          "type": "object"
+        },
+        "raw_points": {
+          "description": "Polygonal pad vertices when AEDB stores the pad with polygon geometry.",
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            ],
+            "type": "array"
+          },
+          "title": "Raw Points",
+          "type": "array"
+        }
+      },
+      "title": "PadPropertyModel",
+      "type": "object"
+    },
+    "PadstackDefinitionModel": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Padstack definition name.",
+          "title": "Name"
+        },
+        "material": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Padstack material.",
+          "title": "Material"
+        },
+        "hole_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Hole type enum or label.",
+          "title": "Hole Type"
+        },
+        "hole_range": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Hole range label.",
+          "title": "Hole Range"
+        },
+        "hole_diameter": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/DisplayValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Hole diameter.",
+          "title": "Hole Diameter"
+        },
+        "hole_diameter_string": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Original hole diameter string.",
+          "title": "Hole Diameter String"
+        },
+        "hole_finished_size": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/DisplayValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Finished hole size.",
+          "title": "Hole Finished Size"
+        },
+        "hole_offset_x": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/DisplayValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Hole X offset.",
+          "title": "Hole Offset X"
+        },
+        "hole_offset_y": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/DisplayValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Hole Y offset.",
+          "title": "Hole Offset Y"
+        },
+        "hole_rotation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/DisplayValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Hole rotation.",
+          "title": "Hole Rotation"
+        },
+        "hole_plating_ratio": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/DisplayValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Hole plating ratio.",
+          "title": "Hole Plating Ratio"
+        },
+        "hole_plating_thickness": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/DisplayValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Hole plating thickness.",
+          "title": "Hole Plating Thickness"
+        },
+        "hole_properties": {
+          "anyOf": [
+            {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "$ref": "#/$defs/DisplayValue"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Hole properties list returned by PyEDB.",
+          "title": "Hole Properties"
+        },
+        "via_layers": {
+          "anyOf": [
+            {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "$ref": "#/$defs/DisplayValue"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Layers traversed by the via.",
+          "title": "Via Layers"
+        },
+        "via_start_layer": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Via start layer.",
+          "title": "Via Start Layer"
+        },
+        "via_stop_layer": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Via stop layer.",
+          "title": "Via Stop Layer"
+        },
+        "pad_by_layer": {
+          "additionalProperties": {
+            "$ref": "#/$defs/PadPropertyModel"
+          },
+          "description": "Regular pad properties keyed by layer name.",
+          "title": "Pad By Layer",
+          "type": "object"
+        },
+        "antipad_by_layer": {
+          "additionalProperties": {
+            "$ref": "#/$defs/PadPropertyModel"
+          },
+          "description": "Anti-pad properties keyed by layer name.",
+          "title": "Antipad By Layer",
+          "type": "object"
+        },
+        "thermalpad_by_layer": {
+          "additionalProperties": {
+            "$ref": "#/$defs/PadPropertyModel"
+          },
+          "description": "Thermal pad properties keyed by layer name.",
+          "title": "Thermalpad By Layer",
+          "type": "object"
+        }
+      },
+      "title": "PadstackDefinitionModel",
+      "type": "object"
+    },
+    "PadstackInstanceModel": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Internal layout object identifier.",
+          "title": "Id"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Padstack instance name.",
+          "title": "Name"
+        },
+        "type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/DisplayValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Padstack instance type.",
+          "title": "Type"
+        },
+        "net_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Connected net name.",
+          "title": "Net Name"
+        },
+        "component_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Owning component name.",
+          "title": "Component Name"
+        },
+        "placement_layer": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Placement layer name.",
+          "title": "Placement Layer"
+        },
+        "position": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "XY position in meters.",
+          "title": "Position"
+        },
+        "rotation": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Rotation in radians.",
+          "title": "Rotation"
+        },
+        "start_layer": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Start layer name.",
+          "title": "Start Layer"
+        },
+        "stop_layer": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Stop layer name.",
+          "title": "Stop Layer"
+        },
+        "layer_range_names": {
+          "anyOf": [
+            {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "$ref": "#/$defs/DisplayValue"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Layer range labels returned by PyEDB.",
+          "title": "Layer Range Names"
+        },
+        "padstack_definition": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Referenced padstack definition name.",
+          "title": "Padstack Definition"
+        },
+        "is_pin": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether PyEDB marks this object as a pin.",
+          "title": "Is Pin"
+        }
+      },
+      "title": "PadstackInstanceModel",
+      "type": "object"
+    },
+    "PadstacksModel": {
+      "additionalProperties": false,
+      "properties": {
+        "definitions": {
+          "description": "Padstack definitions.",
+          "items": {
+            "$ref": "#/$defs/PadstackDefinitionModel"
+          },
+          "title": "Definitions",
+          "type": "array"
+        },
+        "instances": {
+          "description": "Padstack instances.",
+          "items": {
+            "$ref": "#/$defs/PadstackInstanceModel"
+          },
+          "title": "Instances",
+          "type": "array"
+        }
+      },
+      "title": "PadstacksModel",
+      "type": "object"
+    },
+    "PathPrimitiveModel": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Internal primitive identifier.",
+          "title": "Id"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Primitive name.",
+          "title": "Name"
+        },
+        "type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Primitive type label.",
+          "title": "Type"
+        },
+        "aedt_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "AEDT object name.",
+          "title": "Aedt Name"
+        },
+        "layer_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Owning layer name.",
+          "title": "Layer Name"
+        },
+        "net_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Connected net name.",
+          "title": "Net Name"
+        },
+        "component_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Owning component name.",
+          "title": "Component Name"
+        },
+        "area": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Primitive area when available.",
+          "title": "Area"
+        },
+        "bbox": {
+          "anyOf": [
+            {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Bounding box as [xmin, ymin, xmax, ymax].",
+          "title": "Bbox"
+        },
+        "is_void": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether the primitive is a void.",
+          "title": "Is Void"
+        },
+        "width": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/DisplayValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Trace width.",
+          "title": "Width"
+        },
+        "length": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Trace length.",
+          "title": "Length"
+        },
+        "center_line": {
+          "description": "Center line vertices.",
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            ],
+            "type": "array"
+          },
+          "title": "Center Line",
+          "type": "array"
+        },
+        "corner_style": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Corner style enum or label.",
+          "title": "Corner Style"
+        },
+        "end_cap_style": {
+          "$ref": "#/$defs/EndCapStyleModel",
+          "description": "End cap styles."
+        }
+      },
+      "required": [
+        "end_cap_style"
+      ],
+      "title": "PathPrimitiveModel",
+      "type": "object"
+    },
+    "PinModel": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Pin or pin number name.",
+          "title": "Name"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Internal layout object identifier.",
+          "title": "Id"
+        },
+        "net_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Connected net name.",
+          "title": "Net Name"
+        },
+        "position": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Pin XY position in meters.",
+          "title": "Position"
+        },
+        "rotation": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Pin rotation in radians.",
+          "title": "Rotation"
+        },
+        "placement_layer": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Placement layer name.",
+          "title": "Placement Layer"
+        },
+        "start_layer": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Start layer for the pin/via.",
+          "title": "Start Layer"
+        },
+        "stop_layer": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Stop layer for the pin/via.",
+          "title": "Stop Layer"
+        },
+        "padstack_definition": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Referenced padstack definition name.",
+          "title": "Padstack Definition"
+        },
+        "is_pin": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether PyEDB marks this object as a pin.",
+          "title": "Is Pin"
+        }
+      },
+      "title": "PinModel",
+      "type": "object"
+    },
+    "PolygonPrimitiveModel": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Internal primitive identifier.",
+          "title": "Id"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Primitive name.",
+          "title": "Name"
+        },
+        "type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Primitive type label.",
+          "title": "Type"
+        },
+        "aedt_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "AEDT object name.",
+          "title": "Aedt Name"
+        },
+        "layer_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Owning layer name.",
+          "title": "Layer Name"
+        },
+        "net_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Connected net name.",
+          "title": "Net Name"
+        },
+        "component_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Owning component name.",
+          "title": "Component Name"
+        },
+        "area": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Primitive area when available.",
+          "title": "Area"
+        },
+        "bbox": {
+          "anyOf": [
+            {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Bounding box as [xmin, ymin, xmax, ymax].",
+          "title": "Bbox"
+        },
+        "is_void": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether the primitive is a void.",
+          "title": "Is Void"
+        },
+        "raw_points": {
+          "description": "Polygon outline points.",
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            ],
+            "type": "array"
+          },
+          "title": "Raw Points",
+          "type": "array"
+        },
+        "arcs": {
+          "description": "Polygon arc segments.",
+          "items": {
+            "$ref": "#/$defs/ArcModel"
+          },
+          "title": "Arcs",
+          "type": "array"
+        },
+        "is_negative": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether the polygon is negative.",
+          "title": "Is Negative"
+        },
+        "is_zone_primitive": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether the polygon is a zone primitive.",
+          "title": "Is Zone Primitive"
+        },
+        "has_voids": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether the polygon contains voids.",
+          "title": "Has Voids"
+        },
+        "void_ids": {
+          "description": "Referenced void primitive ids.",
+          "items": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": "Void Ids",
+          "type": "array"
+        },
+        "voids": {
+          "description": "Void polygon geometries.",
+          "items": {
+            "$ref": "#/$defs/PolygonVoidModel"
+          },
+          "title": "Voids",
+          "type": "array"
+        }
+      },
+      "title": "PolygonPrimitiveModel",
+      "type": "object"
+    },
+    "PolygonVoidModel": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Internal void primitive identifier.",
+          "title": "Id"
+        },
+        "raw_points": {
+          "description": "Void polygon outline points.",
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            ],
+            "type": "array"
+          },
+          "title": "Raw Points",
+          "type": "array"
+        },
+        "arcs": {
+          "description": "Void polygon arc segments.",
+          "items": {
+            "$ref": "#/$defs/ArcModel"
+          },
+          "title": "Arcs",
+          "type": "array"
+        },
+        "bbox": {
+          "anyOf": [
+            {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Void bounding box as [xmin, ymin, xmax, ymax].",
+          "title": "Bbox"
+        },
+        "area": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Void polygon area when available.",
+          "title": "Area"
+        }
+      },
+      "title": "PolygonVoidModel",
+      "type": "object"
+    },
+    "PrimitivesModel": {
+      "additionalProperties": false,
+      "properties": {
+        "paths": {
+          "description": "Path primitives.",
+          "items": {
+            "$ref": "#/$defs/PathPrimitiveModel"
+          },
+          "title": "Paths",
+          "type": "array"
+        },
+        "polygons": {
+          "description": "Polygon primitives.",
+          "items": {
+            "$ref": "#/$defs/PolygonPrimitiveModel"
+          },
+          "title": "Polygons",
+          "type": "array"
+        },
+        "zone_primitives": {
+          "description": "Zone primitives represented with polygon fields.",
+          "items": {
+            "$ref": "#/$defs/PolygonPrimitiveModel"
+          },
+          "title": "Zone Primitives",
+          "type": "array"
+        }
+      },
+      "title": "PrimitivesModel",
+      "type": "object"
+    },
+    "SummaryStatistics": {
+      "additionalProperties": false,
+      "properties": {
+        "layout_size": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Overall layout size as [width, height] in meters when available.",
+          "title": "Layout Size"
+        },
+        "stackup_thickness": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Total stackup thickness in meters when available.",
+          "title": "Stackup Thickness"
+        },
+        "num_layers": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Layer count reported by PyEDB statistics.",
+          "title": "Num Layers"
+        },
+        "num_nets": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Net count reported by PyEDB statistics.",
+          "title": "Num Nets"
+        },
+        "num_traces": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Trace count reported by PyEDB statistics.",
+          "title": "Num Traces"
+        },
+        "num_polygons": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Polygon count reported by PyEDB statistics.",
+          "title": "Num Polygons"
+        },
+        "num_vias": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Via count reported by PyEDB statistics.",
+          "title": "Num Vias"
+        },
+        "num_discrete_components": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Discrete component count reported by PyEDB statistics.",
+          "title": "Num Discrete Components"
+        },
+        "num_inductors": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Inductor count reported by PyEDB statistics.",
+          "title": "Num Inductors"
+        },
+        "num_resistors": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Resistor count reported by PyEDB statistics.",
+          "title": "Num Resistors"
+        },
+        "num_capacitors": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Capacitor count reported by PyEDB statistics.",
+          "title": "Num Capacitors"
+        }
+      },
+      "title": "SummaryStatistics",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "metadata": {
+      "$ref": "#/$defs/AEDBMetadata",
+      "description": "High-level metadata about the parsed layout."
+    },
+    "summary": {
+      "$ref": "#/$defs/LayoutSummary",
+      "description": "Fast summary counts and statistics."
+    },
+    "materials": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/MaterialModel"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Material definitions. Omitted in summary-only mode.",
+      "title": "Materials"
+    },
+    "layers": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/LayerModel"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Ordered stackup layers. Omitted in summary-only mode.",
+      "title": "Layers"
+    },
+    "nets": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/NetModel"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Resolved nets. Omitted in summary-only mode.",
+      "title": "Nets"
+    },
+    "components": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/ComponentModel"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Resolved components and pins. Omitted in summary-only mode.",
+      "title": "Components"
+    },
+    "padstacks": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PadstacksModel"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Padstack definitions and instances. Omitted in summary-only mode."
+    },
+    "primitives": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PrimitivesModel"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Serialized layout primitives. Omitted in summary-only mode."
+    }
+  },
+  "required": [
+    "metadata",
+    "summary"
+  ],
+  "title": "AEDBLayout",
+  "type": "object"
+}

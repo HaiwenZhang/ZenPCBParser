@@ -1,0 +1,1836 @@
+{
+  "$defs": {
+    "AuroraAttributeModel": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "Attribute name.",
+          "title": "Name",
+          "type": "string"
+        },
+        "value": {
+          "default": "",
+          "description": "Attribute value.",
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "AuroraAttributeModel",
+      "type": "object"
+    },
+    "AuroraComponentModel": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "Component instance name.",
+          "title": "Name",
+          "type": "string"
+        },
+        "part_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Referenced part name.",
+          "title": "Part Name"
+        },
+        "component_layer": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Component layer name.",
+          "title": "Component Layer"
+        },
+        "location": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AuroraLocationModel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Component placement location."
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Component value string.",
+          "title": "Value"
+        },
+        "raw": {
+          "description": "Original component item values.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Raw",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "AuroraComponentModel",
+      "type": "object"
+    },
+    "AuroraDBMetadata": {
+      "additionalProperties": false,
+      "properties": {
+        "project_version": {
+          "default": "1.0.35",
+          "description": "Aurora Translator project version that produced this AuroraDB payload.",
+          "title": "Project Version",
+          "type": "string"
+        },
+        "parser_version": {
+          "default": "0.2.13",
+          "description": "AuroraDB parser version that produced this payload.",
+          "title": "Parser Version",
+          "type": "string"
+        },
+        "output_schema_version": {
+          "default": "0.2.0",
+          "description": "AuroraDB JSON schema version for this payload.",
+          "title": "Output Schema Version",
+          "type": "string"
+        }
+      },
+      "title": "AuroraDBMetadata",
+      "type": "object"
+    },
+    "AuroraDBSummaryModel": {
+      "additionalProperties": false,
+      "properties": {
+        "has_layout": {
+          "description": "Whether layout.db was read.",
+          "title": "Has Layout",
+          "type": "boolean"
+        },
+        "has_parts": {
+          "description": "Whether parts.db was read.",
+          "title": "Has Parts",
+          "type": "boolean"
+        },
+        "units": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Layout units.",
+          "title": "Units"
+        },
+        "metal_layer_count": {
+          "description": "Metal layer count.",
+          "title": "Metal Layer Count",
+          "type": "integer"
+        },
+        "layer_count": {
+          "description": "Layer id count.",
+          "title": "Layer Count",
+          "type": "integer"
+        },
+        "logic_layer_count": {
+          "description": "Logic layer count.",
+          "title": "Logic Layer Count",
+          "type": "integer"
+        },
+        "component_count": {
+          "description": "Component count.",
+          "title": "Component Count",
+          "type": "integer"
+        },
+        "net_count": {
+          "description": "Net count.",
+          "title": "Net Count",
+          "type": "integer"
+        },
+        "net_pin_count": {
+          "description": "Net pin binding count.",
+          "title": "Net Pin Count",
+          "type": "integer"
+        },
+        "net_via_count": {
+          "description": "Net via binding count.",
+          "title": "Net Via Count",
+          "type": "integer"
+        },
+        "net_geometry_count": {
+          "description": "Net geometry count.",
+          "title": "Net Geometry Count",
+          "type": "integer"
+        },
+        "shape_count": {
+          "description": "Shape symbol count.",
+          "title": "Shape Count",
+          "type": "integer"
+        },
+        "via_template_count": {
+          "description": "Via template count.",
+          "title": "Via Template Count",
+          "type": "integer"
+        },
+        "part_count": {
+          "description": "Part count.",
+          "title": "Part Count",
+          "type": "integer"
+        },
+        "symbol_count": {
+          "description": "Schematic symbol count.",
+          "title": "Symbol Count",
+          "type": "integer"
+        },
+        "footprint_count": {
+          "description": "Footprint symbol count.",
+          "title": "Footprint Count",
+          "type": "integer"
+        },
+        "layer_names": {
+          "description": "Metal layer names.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Layer Names",
+          "type": "array"
+        },
+        "net_names": {
+          "description": "Net names.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Net Names",
+          "type": "array"
+        },
+        "part_names": {
+          "description": "Part names.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Part Names",
+          "type": "array"
+        }
+      },
+      "required": [
+        "has_layout",
+        "has_parts",
+        "metal_layer_count",
+        "layer_count",
+        "logic_layer_count",
+        "component_count",
+        "net_count",
+        "net_pin_count",
+        "net_via_count",
+        "net_geometry_count",
+        "shape_count",
+        "via_template_count",
+        "part_count",
+        "symbol_count",
+        "footprint_count"
+      ],
+      "title": "AuroraDBSummaryModel",
+      "type": "object"
+    },
+    "AuroraFootprintMetalLayerModel": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Footprint layer name.",
+          "title": "Name"
+        },
+        "position": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Footprint layer position, for example top or bottom.",
+          "title": "Position"
+        },
+        "geometries": {
+          "description": "Metal-layer geometries.",
+          "items": {
+            "$ref": "#/$defs/AuroraStoredNodeModel"
+          },
+          "title": "Geometries",
+          "type": "array"
+        },
+        "part_pads": {
+          "description": "Footprint pads on this metal layer.",
+          "items": {
+            "$ref": "#/$defs/AuroraPartPadModel"
+          },
+          "title": "Part Pads",
+          "type": "array"
+        },
+        "logic_layers": {
+          "description": "Logic layers under this footprint metal layer.",
+          "items": {
+            "$ref": "#/$defs/AuroraLogicLayerModel"
+          },
+          "title": "Logic Layers",
+          "type": "array"
+        },
+        "raw": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AuroraStoredNodeModel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Original footprint MetalLayer block."
+        }
+      },
+      "title": "AuroraFootprintMetalLayerModel",
+      "type": "object"
+    },
+    "AuroraFootprintPadMapModel": {
+      "additionalProperties": false,
+      "properties": {
+        "footprint": {
+          "description": "Footprint symbol id.",
+          "title": "Footprint",
+          "type": "string"
+        },
+        "pad_id": {
+          "description": "Footprint pad id.",
+          "title": "Pad Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "footprint",
+        "pad_id"
+      ],
+      "title": "AuroraFootprintPadMapModel",
+      "type": "object"
+    },
+    "AuroraFootprintSymbolModel": {
+      "additionalProperties": false,
+      "properties": {
+        "symbol_id": {
+          "description": "Footprint symbol id.",
+          "title": "Symbol Id",
+          "type": "string"
+        },
+        "pad_templates": {
+          "description": "Pad templates.",
+          "items": {
+            "$ref": "#/$defs/AuroraPadTemplateModel"
+          },
+          "title": "Pad Templates",
+          "type": "array"
+        },
+        "metal_layers": {
+          "description": "Footprint metal layers.",
+          "items": {
+            "$ref": "#/$defs/AuroraFootprintMetalLayerModel"
+          },
+          "title": "Metal Layers",
+          "type": "array"
+        },
+        "drill_holes": {
+          "description": "DrillHole blocks.",
+          "items": {
+            "$ref": "#/$defs/AuroraStoredNodeModel"
+          },
+          "title": "Drill Holes",
+          "type": "array"
+        },
+        "outline_geometry_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Outline geometry type.",
+          "title": "Outline Geometry Type"
+        },
+        "outline": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AuroraStoredNodeModel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Outline geometry block."
+        },
+        "raw": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AuroraStoredNodeModel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Original FootPrintSymbol block."
+        }
+      },
+      "required": [
+        "symbol_id"
+      ],
+      "title": "AuroraFootprintSymbolModel",
+      "type": "object"
+    },
+    "AuroraGeometryReferenceModel": {
+      "additionalProperties": false,
+      "properties": {
+        "symbol_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Referenced geometry symbol id.",
+          "title": "Symbol Id"
+        },
+        "location": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AuroraLocationModel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Reference placement location."
+        },
+        "geometry": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AuroraStoredNodeModel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Inline geometry node."
+        },
+        "raw": {
+          "$ref": "#/$defs/AuroraStoredNodeModel",
+          "description": "Original geometry reference block."
+        }
+      },
+      "required": [
+        "raw"
+      ],
+      "title": "AuroraGeometryReferenceModel",
+      "type": "object"
+    },
+    "AuroraLayerStackupModel": {
+      "additionalProperties": false,
+      "properties": {
+        "metal_layers": {
+          "description": "Metal layer names in stack order.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Metal Layers",
+          "type": "array"
+        },
+        "next_layer_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Next layer id recorded by AuroraDB.",
+          "title": "Next Layer Id"
+        },
+        "layer_name_ids": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "description": "Layer name to layer id map.",
+          "title": "Layer Name Ids",
+          "type": "object"
+        }
+      },
+      "title": "AuroraLayerStackupModel",
+      "type": "object"
+    },
+    "AuroraLayoutModel": {
+      "additionalProperties": false,
+      "properties": {
+        "units": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Layout units.",
+          "title": "Units"
+        },
+        "outline": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AuroraStoredNodeModel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Board outline block."
+        },
+        "layer_stackup": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AuroraLayerStackupModel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Layer stackup data."
+        },
+        "shapes": {
+          "description": "Geometry shape symbols.",
+          "items": {
+            "$ref": "#/$defs/AuroraShapeSymbolModel"
+          },
+          "title": "Shapes",
+          "type": "array"
+        },
+        "via_templates": {
+          "description": "Via templates.",
+          "items": {
+            "$ref": "#/$defs/AuroraViaTemplateModel"
+          },
+          "title": "Via Templates",
+          "type": "array"
+        },
+        "nets": {
+          "description": "Nets defined in layout.db.",
+          "items": {
+            "$ref": "#/$defs/AuroraNetModel"
+          },
+          "title": "Nets",
+          "type": "array"
+        }
+      },
+      "title": "AuroraLayoutModel",
+      "type": "object"
+    },
+    "AuroraLocationModel": {
+      "additionalProperties": false,
+      "properties": {
+        "x": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "X coordinate.",
+          "title": "X"
+        },
+        "y": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Y coordinate.",
+          "title": "Y"
+        },
+        "ccw": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether rotation is counter-clockwise.",
+          "title": "Ccw"
+        },
+        "rotation": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Rotation angle.",
+          "title": "Rotation"
+        },
+        "scale": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Scale factor.",
+          "title": "Scale"
+        },
+        "flip_x": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether X mirror is enabled.",
+          "title": "Flip X"
+        },
+        "flip_y": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether Y mirror is enabled.",
+          "title": "Flip Y"
+        },
+        "raw": {
+          "description": "Original AuroraDB location values.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Raw",
+          "type": "array"
+        }
+      },
+      "title": "AuroraLocationModel",
+      "type": "object"
+    },
+    "AuroraLogicLayerModel": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Logic layer name.",
+          "title": "Name"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Logic layer id.",
+          "title": "Id"
+        },
+        "type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Logic layer type.",
+          "title": "Type"
+        },
+        "geometries": {
+          "description": "Layer geometries.",
+          "items": {
+            "$ref": "#/$defs/AuroraGeometryReferenceModel"
+          },
+          "title": "Geometries",
+          "type": "array"
+        },
+        "part_pads": {
+          "description": "Footprint pads on this logic layer.",
+          "items": {
+            "$ref": "#/$defs/AuroraPartPadModel"
+          },
+          "title": "Part Pads",
+          "type": "array"
+        },
+        "raw": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AuroraStoredNodeModel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Original logic layer block."
+        }
+      },
+      "title": "AuroraLogicLayerModel",
+      "type": "object"
+    },
+    "AuroraMetalLayerModel": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "Metal layer name.",
+          "title": "Name",
+          "type": "string"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Metal layer id.",
+          "title": "Id"
+        },
+        "type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Metal layer type.",
+          "title": "Type"
+        },
+        "components": {
+          "description": "Component instances on this layer.",
+          "items": {
+            "$ref": "#/$defs/AuroraComponentModel"
+          },
+          "title": "Components",
+          "type": "array"
+        },
+        "logic_layers": {
+          "description": "Logic layers attached to this metal layer.",
+          "items": {
+            "$ref": "#/$defs/AuroraLogicLayerModel"
+          },
+          "title": "Logic Layers",
+          "type": "array"
+        },
+        "net_geometries": {
+          "description": "Net geometries grouped by net.",
+          "items": {
+            "$ref": "#/$defs/AuroraNetGeometryModel"
+          },
+          "title": "Net Geometries",
+          "type": "array"
+        },
+        "raw": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AuroraStoredNodeModel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Original metal layer block."
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "AuroraMetalLayerModel",
+      "type": "object"
+    },
+    "AuroraNetGeometryModel": {
+      "additionalProperties": false,
+      "properties": {
+        "net_name": {
+          "description": "Net name.",
+          "title": "Net Name",
+          "type": "string"
+        },
+        "geometries": {
+          "description": "Net geometries on the layer.",
+          "items": {
+            "$ref": "#/$defs/AuroraGeometryReferenceModel"
+          },
+          "title": "Geometries",
+          "type": "array"
+        }
+      },
+      "required": [
+        "net_name"
+      ],
+      "title": "AuroraNetGeometryModel",
+      "type": "object"
+    },
+    "AuroraNetModel": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "Net name.",
+          "title": "Name",
+          "type": "string"
+        },
+        "type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Net type.",
+          "title": "Type"
+        },
+        "voltage": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Net voltage value.",
+          "title": "Voltage"
+        },
+        "pins": {
+          "description": "Pins connected to this net.",
+          "items": {
+            "$ref": "#/$defs/AuroraNetPinModel"
+          },
+          "title": "Pins",
+          "type": "array"
+        },
+        "vias": {
+          "description": "Vias connected to this net.",
+          "items": {
+            "$ref": "#/$defs/AuroraNetViaModel"
+          },
+          "title": "Vias",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "AuroraNetModel",
+      "type": "object"
+    },
+    "AuroraNetPinModel": {
+      "additionalProperties": false,
+      "properties": {
+        "component_layer": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Component layer name.",
+          "title": "Component Layer"
+        },
+        "component": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Component reference designator.",
+          "title": "Component"
+        },
+        "pin": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Component pin id.",
+          "title": "Pin"
+        },
+        "metal_layer": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Explicit metal layer name.",
+          "title": "Metal Layer"
+        },
+        "raw": {
+          "description": "Original NetPins/Pin values.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Raw",
+          "type": "array"
+        }
+      },
+      "title": "AuroraNetPinModel",
+      "type": "object"
+    },
+    "AuroraNetViaModel": {
+      "additionalProperties": false,
+      "properties": {
+        "via_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Via template id.",
+          "title": "Via Id"
+        },
+        "location": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AuroraLocationModel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Via placement location."
+        },
+        "raw": {
+          "description": "Original NetVias/Via values.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Raw",
+          "type": "array"
+        }
+      },
+      "title": "AuroraNetViaModel",
+      "type": "object"
+    },
+    "AuroraPadTemplateModel": {
+      "additionalProperties": false,
+      "properties": {
+        "template_id": {
+          "description": "Footprint pad template id.",
+          "title": "Template Id",
+          "type": "string"
+        },
+        "geometries": {
+          "description": "Pad template geometries.",
+          "items": {
+            "$ref": "#/$defs/AuroraStoredNodeModel"
+          },
+          "title": "Geometries",
+          "type": "array"
+        }
+      },
+      "required": [
+        "template_id"
+      ],
+      "title": "AuroraPadTemplateModel",
+      "type": "object"
+    },
+    "AuroraPartInfoModel": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "Part name.",
+          "title": "Name",
+          "type": "string"
+        },
+        "vendor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Vendor name.",
+          "title": "Vendor"
+        },
+        "type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Part type.",
+          "title": "Type"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Part description.",
+          "title": "Description"
+        },
+        "attributes": {
+          "description": "Part attributes.",
+          "items": {
+            "$ref": "#/$defs/AuroraAttributeModel"
+          },
+          "title": "Attributes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "AuroraPartInfoModel",
+      "type": "object"
+    },
+    "AuroraPartModel": {
+      "additionalProperties": false,
+      "properties": {
+        "info": {
+          "$ref": "#/$defs/AuroraPartInfoModel",
+          "description": "PartInfo block."
+        },
+        "footprint_symbols": {
+          "description": "Referenced footprint symbols.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Footprint Symbols",
+          "type": "array"
+        },
+        "symbol_groups": {
+          "description": "Symbol group data rows.",
+          "items": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": "Symbol Groups",
+          "type": "array"
+        },
+        "pins": {
+          "description": "Part pins.",
+          "items": {
+            "$ref": "#/$defs/AuroraPartPinModel"
+          },
+          "title": "Pins",
+          "type": "array"
+        },
+        "raw": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AuroraStoredNodeModel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Original Part block."
+        }
+      },
+      "required": [
+        "info"
+      ],
+      "title": "AuroraPartModel",
+      "type": "object"
+    },
+    "AuroraPartPadModel": {
+      "additionalProperties": false,
+      "properties": {
+        "pad_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Pad id.",
+          "title": "Pad Id"
+        },
+        "template_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Referenced pad template id.",
+          "title": "Template Id"
+        },
+        "location": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AuroraLocationModel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Pad placement location."
+        },
+        "raw": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AuroraStoredNodeModel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Original PartPad block."
+        }
+      },
+      "title": "AuroraPartPadModel",
+      "type": "object"
+    },
+    "AuroraPartPinModel": {
+      "additionalProperties": false,
+      "properties": {
+        "number": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Pin number.",
+          "title": "Number"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Pin name.",
+          "title": "Name"
+        },
+        "type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Pin mount/type string.",
+          "title": "Type"
+        },
+        "swap_group": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Pin swap group.",
+          "title": "Swap Group"
+        },
+        "symbol_pin_map": {
+          "description": "Schematic symbol pin mappings.",
+          "items": {
+            "$ref": "#/$defs/AuroraSymbolPinMapModel"
+          },
+          "title": "Symbol Pin Map",
+          "type": "array"
+        },
+        "footprint_pad_map": {
+          "description": "Footprint pad mappings.",
+          "items": {
+            "$ref": "#/$defs/AuroraFootprintPadMapModel"
+          },
+          "title": "Footprint Pad Map",
+          "type": "array"
+        },
+        "raw_def_data": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Original DefData string.",
+          "title": "Raw Def Data"
+        }
+      },
+      "title": "AuroraPartPinModel",
+      "type": "object"
+    },
+    "AuroraPartsModel": {
+      "additionalProperties": false,
+      "properties": {
+        "parts": {
+          "description": "PartList contents.",
+          "items": {
+            "$ref": "#/$defs/AuroraPartModel"
+          },
+          "title": "Parts",
+          "type": "array"
+        },
+        "schematic_symbols": {
+          "description": "SymbolList contents.",
+          "items": {
+            "$ref": "#/$defs/AuroraSchematicSymbolModel"
+          },
+          "title": "Schematic Symbols",
+          "type": "array"
+        },
+        "footprints": {
+          "description": "FootprintList contents.",
+          "items": {
+            "$ref": "#/$defs/AuroraFootprintSymbolModel"
+          },
+          "title": "Footprints",
+          "type": "array"
+        }
+      },
+      "title": "AuroraPartsModel",
+      "type": "object"
+    },
+    "AuroraRawBlocksModel": {
+      "additionalProperties": false,
+      "properties": {
+        "layout": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AuroraStoredNodeModel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Raw CeLayout block tree."
+        },
+        "parts": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AuroraStoredNodeModel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Raw CeParts block tree."
+        },
+        "layers": {
+          "additionalProperties": {
+            "$ref": "#/$defs/AuroraStoredNodeModel"
+          },
+          "description": "Raw MetalLayer block trees.",
+          "title": "Layers",
+          "type": "object"
+        }
+      },
+      "title": "AuroraRawBlocksModel",
+      "type": "object"
+    },
+    "AuroraSchematicSymbolModel": {
+      "additionalProperties": false,
+      "properties": {
+        "symbol_id": {
+          "description": "Schematic symbol id.",
+          "title": "Symbol Id",
+          "type": "string"
+        },
+        "pin_templates": {
+          "description": "Pin templates.",
+          "items": {
+            "$ref": "#/$defs/AuroraSymbolPinTemplateModel"
+          },
+          "title": "Pin Templates",
+          "type": "array"
+        },
+        "pins": {
+          "description": "Symbol pins.",
+          "items": {
+            "$ref": "#/$defs/AuroraSymbolPinModel"
+          },
+          "title": "Pins",
+          "type": "array"
+        },
+        "geometries": {
+          "description": "Symbol body geometries.",
+          "items": {
+            "$ref": "#/$defs/AuroraStoredNodeModel"
+          },
+          "title": "Geometries",
+          "type": "array"
+        },
+        "raw": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AuroraStoredNodeModel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Original SchematicSymbol block."
+        }
+      },
+      "required": [
+        "symbol_id"
+      ],
+      "title": "AuroraSchematicSymbolModel",
+      "type": "object"
+    },
+    "AuroraShapeSymbolModel": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "Shape id.",
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "description": "Shape symbol name.",
+          "title": "Name",
+          "type": "string"
+        },
+        "geometry": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AuroraStoredNodeModel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Shape geometry node."
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "title": "AuroraShapeSymbolModel",
+      "type": "object"
+    },
+    "AuroraStoredNodeModel": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "description": "Original AuroraDB node kind.",
+          "enum": [
+            "block",
+            "item"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "name": {
+          "description": "Original block or item name.",
+          "title": "Name",
+          "type": "string"
+        },
+        "values": {
+          "description": "Item values. Empty for block nodes.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Values",
+          "type": "array"
+        },
+        "children": {
+          "description": "Child nodes. Empty for item nodes.",
+          "items": {
+            "$ref": "#/$defs/AuroraStoredNodeModel"
+          },
+          "title": "Children",
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "name"
+      ],
+      "title": "AuroraStoredNodeModel",
+      "type": "object"
+    },
+    "AuroraSymbolPinMapModel": {
+      "additionalProperties": false,
+      "properties": {
+        "symbol_group": {
+          "description": "Symbol group id.",
+          "title": "Symbol Group",
+          "type": "string"
+        },
+        "symbol_identifier": {
+          "description": "Symbol identifier id.",
+          "title": "Symbol Identifier",
+          "type": "string"
+        },
+        "symbol_pin": {
+          "description": "Symbol pin number.",
+          "title": "Symbol Pin",
+          "type": "string"
+        }
+      },
+      "required": [
+        "symbol_group",
+        "symbol_identifier",
+        "symbol_pin"
+      ],
+      "title": "AuroraSymbolPinMapModel",
+      "type": "object"
+    },
+    "AuroraSymbolPinModel": {
+      "additionalProperties": false,
+      "properties": {
+        "number": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Symbol pin number.",
+          "title": "Number"
+        },
+        "template_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Referenced symbol pin template id.",
+          "title": "Template Id"
+        },
+        "location": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AuroraLocationModel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Symbol pin location."
+        },
+        "raw": {
+          "description": "Original SymbolPin values.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Raw",
+          "type": "array"
+        }
+      },
+      "title": "AuroraSymbolPinModel",
+      "type": "object"
+    },
+    "AuroraSymbolPinTemplateModel": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "Symbol pin template id.",
+          "title": "Id",
+          "type": "string"
+        },
+        "geometries": {
+          "description": "Template geometries.",
+          "items": {
+            "$ref": "#/$defs/AuroraStoredNodeModel"
+          },
+          "title": "Geometries",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "title": "AuroraSymbolPinTemplateModel",
+      "type": "object"
+    },
+    "AuroraViaLayerPadModel": {
+      "additionalProperties": false,
+      "properties": {
+        "layer_name": {
+          "description": "Layer name.",
+          "title": "Layer Name",
+          "type": "string"
+        },
+        "pad_shape_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Pad shape id.",
+          "title": "Pad Shape Id"
+        },
+        "pad_rotation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Pad rotation value.",
+          "title": "Pad Rotation"
+        },
+        "pad_ccw": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Pad counter-clockwise flag.",
+          "title": "Pad Ccw"
+        },
+        "antipad_shape_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Anti-pad shape id.",
+          "title": "Antipad Shape Id"
+        },
+        "antipad_rotation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Anti-pad rotation value.",
+          "title": "Antipad Rotation"
+        },
+        "antipad_ccw": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Anti-pad counter-clockwise flag.",
+          "title": "Antipad Ccw"
+        },
+        "raw": {
+          "description": "Original via layer values.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Raw",
+          "type": "array"
+        }
+      },
+      "required": [
+        "layer_name"
+      ],
+      "title": "AuroraViaLayerPadModel",
+      "type": "object"
+    },
+    "AuroraViaTemplateModel": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "Via template id.",
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Via template name.",
+          "title": "Name"
+        },
+        "barrel": {
+          "description": "Barrel shape data.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Barrel",
+          "type": "array"
+        },
+        "layer_pads": {
+          "description": "Layer pad stack data.",
+          "items": {
+            "$ref": "#/$defs/AuroraViaLayerPadModel"
+          },
+          "title": "Layer Pads",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "title": "AuroraViaTemplateModel",
+      "type": "object"
+    }
+  },
+  "$id": "https://aurora-translator.local/schemas/auroradb-0.2.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Structured, AEDB-model-style view of directly stored AuroraDB data.",
+  "properties": {
+    "metadata": {
+      "$ref": "#/$defs/AuroraDBMetadata",
+      "description": "Version metadata."
+    },
+    "root": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "AuroraDB directory path.",
+      "title": "Root"
+    },
+    "summary": {
+      "$ref": "#/$defs/AuroraDBSummaryModel",
+      "description": "High-level AuroraDB summary."
+    },
+    "layout": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/AuroraLayoutModel"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Structured layout.db contents."
+    },
+    "layers": {
+      "description": "Structured layer file contents.",
+      "items": {
+        "$ref": "#/$defs/AuroraMetalLayerModel"
+      },
+      "title": "Layers",
+      "type": "array"
+    },
+    "parts": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/AuroraPartsModel"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Structured parts.db contents."
+    },
+    "diagnostics": {
+      "description": "Non-fatal diagnostics.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Diagnostics",
+      "type": "array"
+    },
+    "raw_blocks": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/AuroraRawBlocksModel"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional raw block tree payload."
+    }
+  },
+  "required": [
+    "metadata",
+    "summary"
+  ],
+  "title": "AuroraDBModel",
+  "type": "object"
+}
