@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
+from math import radians
 from typing import Iterable
 
 from aurora_translator.semantic.adapters.utils import (
@@ -40,12 +41,17 @@ from aurora_translator.semantic.passes import (
 )
 from aurora_translator.sources.brd.models import (
     BRDBlockSummary,
+    BRDComponent,
+    BRDComponentInstance,
+    BRDFootprintInstance,
     BRDKeepout,
     BRDLayer,
     BRDLayout,
+    BRDPadDefinition,
     BRDPlacedPad,
     BRDSegment,
     BRDShape,
+    BRDText,
 )
 
 
@@ -61,10 +67,28 @@ class _PadRecord:
     component_id: str
     footprint_id: str | None
     footprint_name: str
+    part_name: str
+    refdes: str
     net_id: str | None
     shape_id: str
     pin_name: str
+    padstack_definition: str | None
     center: SemanticPoint
+    layer_name: str | None
+    side: str | None
+    component_location: SemanticPoint | None
+    component_rotation: float | None
+
+
+@dataclass(slots=True)
+class _ComponentInfo:
+    key: int
+    refdes: str
+    part_name: str | None
+    layer_name: str | None
+    side: str | None
+    location: SemanticPoint | None
+    rotation: float | None
 
 
 def from_brd(payload: BRDLayout, *, build_connectivity: bool = True) -> SemanticBoard:
@@ -72,6 +96,7 @@ def from_brd(payload: BRDLayout, *, build_connectivity: bool = True) -> Semantic
     layers = _semantic_layers(payload)
     layer_names = [layer.name for layer in layers]
     top_layer = _top_layer_name(layers)
+    bottom_layer = _bottom_layer_name(layers)
 
     nets, net_ids_by_assignment = _semantic_nets(payload)
     shapes: list[SemanticShape] = []
@@ -84,11 +109,22 @@ def from_brd(payload: BRDLayout, *, build_connectivity: bool = True) -> Semantic
         shape_ids_by_key,
     )
     instance_footprint_names = _instance_footprint_names(payload)
+    component_infos = _component_infos(payload, top_layer, bottom_layer)
+    text_values_by_key = _text_values_by_key(payload.texts or [])
+    pad_definitions_by_key = {pad.key: pad for pad in payload.pad_definitions or []}
+    padstack_names_by_key = {
+        padstack.key: padstack.name or f"Padstack_{padstack.key}"
+        for padstack in payload.padstacks or []
+    }
     pad_records = _placed_pad_records(
         payload,
         top_layer,
         net_ids_by_assignment,
         instance_footprint_names,
+        component_infos,
+        text_values_by_key,
+        pad_definitions_by_key,
+        padstack_names_by_key,
         shapes,
         shape_ids_by_key,
     )
@@ -99,6 +135,8 @@ def from_brd(payload: BRDLayout, *, build_connectivity: bool = True) -> Semantic
         layer_names,
         net_ids_by_assignment,
         via_template_ids_by_padstack,
+        pad_definitions_by_key,
+        padstack_names_by_key,
     )
     primitives = _semantic_primitives(payload, layer_names, net_ids_by_assignment)
 
@@ -253,6 +291,13 @@ def _top_layer_name(layers: list[SemanticLayer]) -> str | None:
     return layers[0].name if layers else None
 
 
+def _bottom_layer_name(layers: list[SemanticLayer]) -> str | None:
+    for layer in layers:
+        if layer.side == "bottom":
+            return layer.name
+    return layers[-1].name if layers else None
+
+
 def _semantic_nets(payload: BRDLayout) -> tuple[list[SemanticNet], dict[int, str]]:
     nets: list[SemanticNet] = []
     net_ids_by_assignment: dict[int, str] = {}
@@ -268,7 +313,21 @@ def _semantic_nets(payload: BRDLayout) -> tuple[list[SemanticNet], dict[int, str
         )
         net_ids_by_assignment[net.assignment] = net_id
         net_ids_by_assignment[net.key] = net_id
+    if not any((net.name or "").casefold() == "nonet" for net in nets):
+        no_net_id = _no_net_id(payload)
+        nets.append(
+            SemanticNet(
+                id=no_net_id,
+                name="NoNet",
+                role="unknown",
+                source=source_ref("brd", "implicit_no_net", "NoNet"),
+            )
+        )
     return nets, net_ids_by_assignment
+
+
+def _no_net_id(payload: BRDLayout) -> str:
+    return semantic_id("net", "NoNet", len(payload.nets or []))
 
 
 def _semantic_via_templates(
@@ -279,7 +338,7 @@ def _semantic_via_templates(
 ) -> tuple[list[SemanticViaTemplate], dict[int, str]]:
     via_templates: list[SemanticViaTemplate] = []
     ids_by_padstack: dict[int, str] = {}
-    for index, padstack in enumerate(payload.padstacks or []):
+    for index, padstack in enumerate(_ordered_padstacks_for_templates(payload)):
         diameter = _raw_length_to_semantic(payload, padstack.drill_size_raw)
         if diameter is None or diameter <= 0:
             diameter = DEFAULT_PAD_DIAMETER_MM
@@ -303,7 +362,7 @@ def _semantic_via_templates(
                         layer_name=layer_name,
                         pad_shape_id=barrel_shape_id,
                     )
-                    for layer_name in layer_names
+                    for layer_name in _padstack_layer_names(padstack, layer_names)
                 ],
                 geometry=SemanticViaTemplateGeometry(
                     source="brd_padstack_drill",
@@ -316,11 +375,41 @@ def _semantic_via_templates(
     return via_templates, ids_by_padstack
 
 
+def _ordered_padstacks_for_templates(payload: BRDLayout):
+    padstacks_by_key = {padstack.key: padstack for padstack in payload.padstacks or []}
+    ordered_keys: list[int] = []
+    seen: set[int] = set()
+    for via in payload.vias or []:
+        if via.padstack in seen:
+            continue
+        if via.padstack in padstacks_by_key:
+            ordered_keys.append(via.padstack)
+            seen.add(via.padstack)
+    for padstack in payload.padstacks or []:
+        if padstack.key in seen:
+            continue
+        ordered_keys.append(padstack.key)
+        seen.add(padstack.key)
+    return [padstacks_by_key[key] for key in ordered_keys]
+
+
+def _padstack_layer_names(padstack, layer_names: list[str]) -> list[str]:
+    if not layer_names:
+        return []
+    if getattr(padstack, "layer_count", 0) > 1:
+        return list(layer_names)
+    return [layer_names[0]]
+
+
 def _placed_pad_records(
     payload: BRDLayout,
     top_layer: str | None,
     net_ids_by_assignment: dict[int, str],
     instance_footprint_names: dict[int, str],
+    component_infos: dict[int, _ComponentInfo],
+    text_values_by_key: dict[int, str],
+    pad_definitions_by_key: dict[int, BRDPadDefinition],
+    padstack_names_by_key: dict[int, str],
     shapes: list[SemanticShape],
     shape_ids_by_key: dict[tuple[str, tuple[float, ...]], str],
 ) -> list[_PadRecord]:
@@ -328,6 +417,9 @@ def _placed_pad_records(
         return []
     records: list[_PadRecord] = []
     for index, placed_pad in enumerate(payload.placed_pads or []):
+        actual_pin_name = _pin_name(placed_pad, text_values_by_key)
+        if not _placed_pad_has_logical_pin(placed_pad, actual_pin_name):
+            continue
         bbox = _bbox_points(payload, placed_pad.coords_raw)
         if bbox is None:
             continue
@@ -349,23 +441,63 @@ def _placed_pad_records(
         footprint_name = instance_footprint_names.get(
             placed_pad.parent_footprint, f"BRD_FOOTPRINT_{placed_pad.parent_footprint}"
         )
+        component_info = component_infos.get(placed_pad.parent_footprint)
+        component_key = (
+            component_info.key if component_info else placed_pad.parent_footprint
+        )
+        refdes = (
+            component_info.refdes
+            if component_info and component_info.refdes
+            else f"BRD_{placed_pad.parent_footprint}"
+        )
+        part_name = (
+            component_info.part_name
+            if component_info and component_info.part_name
+            else footprint_name
+        )
+        pad_definition = pad_definitions_by_key.get(placed_pad.pad)
+        padstack_definition = (
+            padstack_names_by_key.get(pad_definition.padstack)
+            if pad_definition
+            else None
+        )
         footprint_id = semantic_id("footprint", footprint_name)
         records.append(
             _PadRecord(
                 pad=placed_pad,
-                component_id=semantic_id("component", placed_pad.parent_footprint),
+                component_id=semantic_id("component", component_key),
                 footprint_id=footprint_id,
                 footprint_name=footprint_name,
+                part_name=part_name,
+                refdes=refdes,
                 net_id=net_ids_by_assignment.get(placed_pad.net_assignment),
                 shape_id=shape_id,
-                pin_name=_pin_name(placed_pad),
+                pin_name=actual_pin_name,
+                padstack_definition=padstack_definition,
                 center=center,
+                layer_name=(component_info.layer_name if component_info else None)
+                or top_layer,
+                side=(component_info.side if component_info else None) or "top",
+                component_location=component_info.location if component_info else None,
+                component_rotation=component_info.rotation if component_info else None,
             )
         )
     return records
 
 
-def _pin_name(placed_pad: BRDPlacedPad) -> str:
+def _placed_pad_has_logical_pin(placed_pad: BRDPlacedPad, pin_name: str) -> bool:
+    if placed_pad.pin_number:
+        return True
+    return bool(pin_name and pin_name != str(placed_pad.key))
+
+
+def _pin_name(
+    placed_pad: BRDPlacedPad, text_values_by_key: dict[int, str] | None = None
+) -> str:
+    if text_values_by_key:
+        name = text_values_by_key.get(placed_pad.name_text)
+        if name:
+            return name
     if placed_pad.pin_number:
         return str(placed_pad.pin_number)
     return str(placed_pad.key)
@@ -416,12 +548,15 @@ def _component_pin_pad_records(
     pins: list[SemanticPin] = []
     pads: list[SemanticPad] = []
     for component_id, records in sorted(pads_by_component.items()):
-        component_key = str(records[0].pad.parent_footprint)
-        component_center = _average_point(record.center for record in records)
+        first_record = records[0]
+        component_key = str(first_record.pad.parent_footprint)
+        component_center = first_record.component_location or _average_point(
+            record.center for record in records
+        )
         pin_ids: list[str] = []
         pad_ids: list[str] = []
-        footprint_name = records[0].footprint_name
-        footprint_id = records[0].footprint_id
+        footprint_name = first_record.footprint_name
+        footprint_id = first_record.footprint_id
 
         for record in records:
             pin_id = semantic_id(
@@ -438,7 +573,7 @@ def _component_pin_pad_records(
                     component_id=component_id,
                     net_id=record.net_id,
                     pad_ids=[pad_id],
-                    layer_name=top_layer,
+                    layer_name=record.layer_name or top_layer,
                     position=record.center,
                     source=source_ref("brd", "placed_pads.pin_number", record.pad.key),
                 )
@@ -451,9 +586,10 @@ def _component_pin_pad_records(
                     component_id=component_id,
                     pin_id=pin_id,
                     net_id=record.net_id,
-                    layer_name=top_layer,
+                    layer_name=record.layer_name or top_layer,
                     position=record.center,
-                    padstack_definition=str(record.pad.pad or ""),
+                    padstack_definition=record.padstack_definition
+                    or str(record.pad.pad or ""),
                     geometry=SemanticPadGeometry(
                         shape_id=record.shape_id,
                         source="brd_placed_pad_bbox",
@@ -465,15 +601,15 @@ def _component_pin_pad_records(
         components.append(
             SemanticComponent(
                 id=component_id,
-                refdes=f"BRD_{component_key}",
-                name=f"BRD_{component_key}",
-                part_name=footprint_name,
+                refdes=first_record.refdes or f"BRD_{component_key}",
+                name=first_record.refdes or f"BRD_{component_key}",
+                part_name=first_record.part_name or footprint_name,
                 package_name=footprint_name,
                 footprint_id=footprint_id,
-                layer_name=top_layer,
-                side="top",
+                layer_name=first_record.layer_name or top_layer,
+                side=first_record.side or "top",
                 location=component_center,
-                rotation=0,
+                rotation=first_record.component_rotation or 0,
                 pin_ids=pin_ids,
                 pad_ids=pad_ids,
                 source=source_ref("brd", "placed_pads.parent_footprint", component_key),
@@ -488,6 +624,8 @@ def _semantic_vias(
     layer_names: list[str],
     net_ids_by_assignment: dict[int, str],
     via_template_ids_by_padstack: dict[int, str],
+    pad_definitions_by_key: dict[int, BRDPadDefinition],
+    padstack_names_by_key: dict[int, str],
 ) -> list[SemanticVia]:
     vias: list[SemanticVia] = []
     if not layer_names:
@@ -509,6 +647,74 @@ def _semantic_vias(
                 position=SemanticPoint(x=x, y=y),
                 geometry=SemanticViaGeometry(rotation=0),
                 source=source_ref("brd", f"vias[{index}]", via.key),
+            )
+        )
+    vias.extend(
+        _semantic_pad_definition_hole_vias(
+            payload,
+            layer_names,
+            net_ids_by_assignment,
+            via_template_ids_by_padstack,
+            pad_definitions_by_key,
+            padstack_names_by_key,
+            start_index=len(vias),
+        )
+    )
+    return vias
+
+
+def _semantic_pad_definition_hole_vias(
+    payload: BRDLayout,
+    layer_names: list[str],
+    net_ids_by_assignment: dict[int, str],
+    via_template_ids_by_padstack: dict[int, str],
+    pad_definitions_by_key: dict[int, BRDPadDefinition],
+    padstack_names_by_key: dict[int, str],
+    *,
+    start_index: int,
+) -> list[SemanticVia]:
+    padstacks_by_key = {padstack.key: padstack for padstack in payload.padstacks or []}
+    text_values_by_key = _text_values_by_key(payload.texts or [])
+    no_net_id = _no_net_id(payload)
+    vias: list[SemanticVia] = []
+    seen: set[tuple[int, float, float, str | None]] = set()
+    for placed_pad in payload.placed_pads or []:
+        pin_name = _pin_name(placed_pad, text_values_by_key)
+        if _placed_pad_has_logical_pin(placed_pad, pin_name):
+            continue
+        pad_definition = pad_definitions_by_key.get(placed_pad.pad)
+        if pad_definition is None:
+            continue
+        padstack = padstacks_by_key.get(pad_definition.padstack)
+        if padstack is None or padstack.layer_count <= 1:
+            continue
+        template_id = via_template_ids_by_padstack.get(pad_definition.padstack)
+        if template_id is None:
+            continue
+        bbox = _bbox_points(payload, placed_pad.coords_raw)
+        if bbox is None:
+            continue
+        x_min, y_min, x_max, y_max = bbox
+        x = (x_min + x_max) / 2.0
+        y = (y_min + y_max) / 2.0
+        net_id = no_net_id
+        key = (pad_definition.padstack, round(x, 9), round(y, 9), net_id)
+        if key in seen:
+            continue
+        seen.add(key)
+        index = start_index + len(vias)
+        vias.append(
+            SemanticVia(
+                id=semantic_id("via", f"pad:{placed_pad.key}:{index}"),
+                name=padstack_names_by_key.get(pad_definition.padstack),
+                template_id=template_id,
+                net_id=net_id,
+                layer_names=_padstack_layer_names(padstack, layer_names),
+                position=SemanticPoint(x=x, y=y),
+                geometry=SemanticViaGeometry(
+                    rotation=radians(float(pad_definition.rotation_mdeg or 0) / 1000.0)
+                ),
+                source=source_ref("brd", "pad_definitions", pad_definition.key),
             )
         )
     return vias
@@ -826,6 +1032,115 @@ def _instance_footprint_names(payload: BRDLayout) -> dict[int, str]:
     return result
 
 
+def _component_infos(
+    payload: BRDLayout,
+    top_layer: str | None,
+    bottom_layer: str | None,
+) -> dict[int, _ComponentInfo]:
+    component_instances_by_key = {
+        instance.key: instance for instance in payload.component_instances or []
+    }
+    component_instances_by_footprint = {
+        instance.footprint_instance: instance
+        for instance in payload.component_instances or []
+        if instance.footprint_instance
+    }
+    part_names_by_instance = _part_names_by_component_instance(
+        payload.components or [], component_instances_by_key
+    )
+
+    result: dict[int, _ComponentInfo] = {}
+    for footprint_instance in payload.footprint_instances or []:
+        component_instance = component_instances_by_key.get(
+            footprint_instance.component_instance
+        ) or component_instances_by_footprint.get(footprint_instance.key)
+        component_key = (
+            component_instance.key if component_instance else footprint_instance.key
+        )
+        refdes = (
+            component_instance.refdes
+            if component_instance and component_instance.refdes
+            else f"BRD_{footprint_instance.key}"
+        )
+        side = "bottom" if footprint_instance.layer != 0 else "top"
+        layer_name = bottom_layer if side == "bottom" else top_layer
+        result[footprint_instance.key] = _ComponentInfo(
+            key=component_key,
+            refdes=refdes,
+            part_name=part_names_by_instance.get(component_key),
+            layer_name=layer_name,
+            side=side,
+            location=_footprint_instance_location(payload, footprint_instance),
+            rotation=radians(_footprint_instance_rotation_degrees(footprint_instance)),
+        )
+    return result
+
+
+def _part_names_by_component_instance(
+    components: Iterable[BRDComponent],
+    component_instances_by_key: dict[int, BRDComponentInstance],
+) -> dict[int, str]:
+    result: dict[int, str] = {}
+    for component in components:
+        part_name = component.device_type or component.symbol_name
+        if not part_name or not component.first_instance:
+            continue
+        current = component.first_instance
+        seen: set[int] = set()
+        while current and current not in seen:
+            seen.add(current)
+            instance = component_instances_by_key.get(current)
+            if instance is None:
+                break
+            result.setdefault(instance.key, part_name)
+            next_key = instance.next
+            if not next_key or next_key == component.key:
+                break
+            current = next_key
+    return result
+
+
+def _footprint_instance_location(
+    payload: BRDLayout, footprint_instance: BRDFootprintInstance
+) -> SemanticPoint | None:
+    x = _raw_coord_to_semantic(payload, footprint_instance.x_raw)
+    y = _raw_coord_to_semantic(payload, footprint_instance.y_raw)
+    if x is None or y is None:
+        return None
+    return SemanticPoint(x=x, y=y)
+
+
+def _footprint_instance_rotation_degrees(
+    footprint_instance: BRDFootprintInstance,
+) -> float:
+    rotation = float(footprint_instance.rotation_mdeg or 0) / 1000.0
+    if footprint_instance.layer != 0:
+        rotation = 180.0 - rotation
+    return rotation
+
+
+def _text_values_by_key(texts: Iterable[BRDText]) -> dict[int, str]:
+    result: dict[int, str] = {}
+    direct: dict[int, str] = {}
+    wrappers: list[BRDText] = []
+    for text in texts:
+        if text.text:
+            direct[text.key] = text.text
+            result[text.key] = text.text
+            if text.string_graphic_key:
+                result[text.string_graphic_key] = text.text
+        else:
+            wrappers.append(text)
+
+    for text in wrappers:
+        if not text.string_graphic_key:
+            continue
+        value = direct.get(text.string_graphic_key)
+        if value:
+            result[text.key] = value
+    return result
+
+
 def _is_footprint_instance_block(block: BRDBlockSummary) -> bool:
     return (
         block.block_type == FOOTPRINT_INSTANCE_BLOCK
@@ -892,9 +1207,6 @@ def _raw_coord_to_semantic(
 ) -> float | None:
     if value is None:
         return None
-    scale_nm = payload.header.coordinate_scale_nm
-    if scale_nm is not None and scale_nm > 0:
-        return float(value) * scale_nm / 1_000_000.0
     unit = payload.header.board_units.casefold()
     if unit in {"millimeters", "millimeter", "mm"}:
         divisor = payload.header.units_divisor or 10_000
@@ -902,6 +1214,9 @@ def _raw_coord_to_semantic(
     if unit in {"mils", "mil"}:
         divisor = payload.header.units_divisor or 1
         return float(value) / divisor * 0.0254
+    scale_nm = payload.header.coordinate_scale_nm
+    if scale_nm is not None and scale_nm > 0:
+        return float(value) * scale_nm / 1_000_000.0
     return float(value) * BRD_UNKNOWN_MM_PER_RAW
 
 

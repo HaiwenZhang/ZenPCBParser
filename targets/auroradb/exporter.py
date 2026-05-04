@@ -220,7 +220,9 @@ def _write_stackup_and_build_aaf_lines(
     part_export_plan = None if aedb_plan is not None else _part_export_plan(board)
 
     (stackup_root / "stackup.dat").write_text(
-        _stackup_dat(stackup_layers), encoding="utf-8", newline="\n"
+        _stackup_dat(stackup_layers, design_name=_stackup_design_name(board)),
+        encoding="utf-8",
+        newline="\n",
     )
     (stackup_root / "stackup.json").write_text(
         json.dumps(_stackup_json(stackup_layers), ensure_ascii=False, indent=2) + "\n",
@@ -250,7 +252,9 @@ def _write_stackup_and_build_auroradb_package(
     part_export_plan = None if aedb_plan is not None else _part_export_plan(board)
 
     (stackup_root / "stackup.dat").write_text(
-        _stackup_dat(stackup_layers), encoding="utf-8", newline="\n"
+        _stackup_dat(stackup_layers, design_name=_stackup_design_name(board)),
+        encoding="utf-8",
+        newline="\n",
     )
     (stackup_root / "stackup.json").write_text(
         json.dumps(_stackup_json(stackup_layers), ensure_ascii=False, indent=2) + "\n",
@@ -284,3 +288,9 @@ def _cleanup_output_root(root: Path, *, keep_aaf: bool) -> None:
     stale_aaf_dir = root / AAF_DIRNAME
     if stale_aaf_dir.exists() and not keep_aaf:
         shutil.rmtree(stale_aaf_dir)
+
+
+def _stackup_design_name(board: SemanticBoard) -> str | None:
+    if not board.metadata.source:
+        return None
+    return Path(board.metadata.source).name

@@ -8,6 +8,17 @@
 
 [English](#en) | [返回顶部](#top)
 
+## 1.0.44
+
+- 新增 Rust ODB++ target exporter `crates/odbpp_exporter/` 和 Python wrapper `targets/odbpp/`；`convert --to odbpp` 现在走 `source -> SemanticBoard -> ODB++`，不从 AEDB/BRD/ALG/ODB++ source 格式直接旁路导出。
+- ODB++ exporter 写出 deterministic 目录结构，覆盖 `matrix/matrix`、`misc/info`、`steps/<step>/profile`、`stephdr`、layer `features` / `attrlist` / drill `tools`、component layer `components`、`eda/data` 和 `netlists/cadnet/netlist`。
+- Rust writer 按 `examples/odbpp` 的 C++ 语义拆分：`writer.rs` 只做模块入口，`entity.rs` 负责 entity/step 编排，`features.rs` 负责 feature records，`attributes.rs` 负责 attribute tables 和 layer attrlist，`components.rs` 负责 component records，`package.rs` 负责 EDA package/pin outlines，`eda_data.rs` 负责 EDA net/package data，`netlist.rs` 负责 cadnet netlist，`formatting.rs` 和 `model.rs` 负责 ODB++ 格式化和 Semantic 输入模型。
+- 对照 C++ 修正 component `TOP` 记录的 net/subnet 引用，并补齐 cadnet pad/via net point 记录；layer attrlist 会从 Semantic layer/material 的 thickness、material、dielectric constant 和 loss tangent 写出可用属性。JSON schema 不变。
+- 验证：`cargo test --manifest-path crates/odbpp_exporter/Cargo.toml` 通过，生成的 ODB++ 目录可由现有 Rust ODB++ parser 读回。
+- 修正 `<CASE_ROOT>/AX-small` 驱动的 Allegro ALG / BRD 到 AuroraDB 对齐问题：ALG adapter 现在保留 extracta stackup material / dielectric、源单位坐标、最大 board outline、`NoNet`、part 名称和多层 padstack via；BRD adapter 现在使用 source component / instance / footprint / pad definition 字段恢复 refdes、part/package、side、component 位置旋转、pin 名称和 NPTH-like hole via。
+- BRD parser `0.1.5` / BRD JSON schema `0.4.0` 新增 0x06 component、0x07 component instance、0x2D footprint instance 和 0x0D pad definition source model。Semantic parser 更新到 `0.7.6`，Semantic JSON schema 保持 `0.7.1`；ALG parser / ALG JSON schema 不变。
+- 验证 `<CASE_ROOT>/AX-small`：ALG 生成的 AuroraDB `stackup.dat` 与标准输出一致，`part_names=244/244`、`via_templates=31`、`netvias=27914`、`netpins=8589`；BRD 生成的 AuroraDB 为 `part_names=244/244`、`via_templates=31`、`netvias=27914`、`netpins=8589`、`components=2176`、`pins=8589`。BRD source 仍不暴露完整介质/material stackup，因此 BRD stackup 输出只覆盖可解析的 copper layer。
+
 ## 1.0.43
 
 - 新增 Cadence Allegro BRD source parser 初版：`crates/brd_parser/` 提供 Rust 解析核心、CLI 和 PyO3 native module，`sources/brd/` 提供 Python 集成层、Pydantic model 和可生成 JSON schema；`inspect`、`dump`、`schema`、`convert`、`semantic` 和 pipeline 现在接受 `--format brd` / `--from brd`。
@@ -368,6 +379,17 @@
 ## English
 
 [中文](#zh) | [Back to top](#top)
+
+## 1.0.44
+
+- Added the Rust ODB++ target exporter `crates/odbpp_exporter/` and Python wrapper `targets/odbpp/`; `convert --to odbpp` now follows `source -> SemanticBoard -> ODB++` without bypassing Semantic from AEDB/BRD/ALG/ODB++ source formats.
+- The ODB++ exporter writes a deterministic directory tree covering `matrix/matrix`, `misc/info`, `steps/<step>/profile`, `stephdr`, layer `features` / `attrlist` / drill `tools`, component-layer `components`, `eda/data`, and `netlists/cadnet/netlist`.
+- The Rust writer is split along the C++ `examples/odbpp` semantics: `writer.rs` is only the module entry point, while `entity.rs` owns entity/step orchestration, `features.rs` owns feature records, `attributes.rs` owns attribute tables and layer attrlists, `components.rs` owns component records, `package.rs` owns EDA package/pin outlines, `eda_data.rs` owns EDA net/package data, `netlist.rs` owns cadnet netlists, and `formatting.rs` / `model.rs` own ODB++ formatting and the Semantic input model.
+- Fixed component `TOP` record net/subnet references after comparing against the C++ exporter, and added cadnet pad/via net point records. Layer attrlists now emit available Semantic layer/material thickness, material, dielectric constant, and loss tangent attributes. JSON schemas are unchanged.
+- Verification: `cargo test --manifest-path crates/odbpp_exporter/Cargo.toml` passes, and the generated ODB++ directory round-trips through the existing Rust ODB++ parser.
+- Fixed Allegro ALG / BRD to AuroraDB alignment issues driven by `<CASE_ROOT>/AX-small`: the ALG adapter now preserves extracta stackup material / dielectrics, source-unit coordinates, the largest board outline, `NoNet`, part names, and multi-layer padstack vias; the BRD adapter now uses source component / instance / footprint / pad-definition fields to recover refdes, part/package, side, component location/rotation, pin names, and NPTH-like hole vias.
+- BRD parser `0.1.5` / BRD JSON schema `0.4.0` add 0x06 component, 0x07 component instance, 0x2D footprint instance, and 0x0D pad definition source models. Semantic parser is now `0.7.6`, while Semantic JSON schema remains `0.7.1`; ALG parser / ALG JSON schema are unchanged.
+- Verification with `<CASE_ROOT>/AX-small`: ALG-generated AuroraDB `stackup.dat` matches the standard output, with `part_names=244/244`, `via_templates=31`, `netvias=27914`, and `netpins=8589`; BRD-generated AuroraDB has `part_names=244/244`, `via_templates=31`, `netvias=27914`, `netpins=8589`, `components=2176`, and `pins=8589`. BRD source still does not expose the full dielectric/material stackup, so BRD stackup output covers only the parsed copper layers.
 
 ## 1.0.43
 

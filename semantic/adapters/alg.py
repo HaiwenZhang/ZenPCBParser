@@ -18,6 +18,7 @@ from aurora_translator.semantic.models import (
     SemanticDiagnostic,
     SemanticFootprint,
     SemanticLayer,
+    SemanticMaterial,
     SemanticMetadata,
     SemanticNet,
     SemanticPad,
@@ -43,6 +44,7 @@ from aurora_translator.sources.alg.models import (
     ALGComponent,
     ALGLayout,
     ALGPad,
+    ALGPadstack,
     ALGPin,
     ALGPoint,
     ALGShape,
@@ -58,7 +60,8 @@ MIL_TO_MM = 0.0254
 
 def from_alg(payload: ALGLayout, *, build_connectivity: bool = True) -> SemanticBoard:
     diagnostics = _source_diagnostics(payload)
-    layers = _semantic_layers(payload)
+    materials, material_ids_by_key = _semantic_materials(payload)
+    layers = _semantic_layers(payload, material_ids_by_key)
     metal_layer_names = [layer.name for layer in layers if _is_metal_layer(layer)]
     top_layer = _top_layer_name(layers)
     bottom_layer = _bottom_layer_name(layers)
@@ -98,6 +101,11 @@ def from_alg(payload: ALGLayout, *, build_connectivity: bool = True) -> Semantic
         component.refdes or component.name or component.id: component.id
         for component in components
     }
+    component_layers_by_refdes = {
+        component.refdes: component.layer_name
+        for component in components
+        if component.refdes and component.layer_name
+    }
 
     pins: list[SemanticPin] = []
     pads: list[SemanticPad] = []
@@ -110,6 +118,7 @@ def from_alg(payload: ALGLayout, *, build_connectivity: bool = True) -> Semantic
         source_pads_by_refdes_pin,
         components_by_refdes,
         component_ids_by_refdes,
+        component_layers_by_refdes,
         footprint_ids_by_name,
         net_ids_by_name,
         top_layer,
@@ -148,6 +157,7 @@ def from_alg(payload: ALGLayout, *, build_connectivity: bool = True) -> Semantic
         units=_semantic_units(payload),
         summary=SemanticSummary(),
         layers=layers,
+        materials=materials,
         shapes=shapes,
         via_templates=via_templates,
         nets=nets,
@@ -178,38 +188,157 @@ def _source_diagnostics(payload: ALGLayout) -> list[SemanticDiagnostic]:
     ]
 
 
-def _semantic_layers(payload: ALGLayout) -> list[SemanticLayer]:
+def _semantic_materials(
+    payload: ALGLayout,
+) -> tuple[list[SemanticMaterial], dict[tuple[str, str, str], str]]:
+    materials: list[SemanticMaterial] = []
+    material_ids_by_key: dict[tuple[str, str, str], str] = {}
+    metal_index = 1
+    dielectric_index = 0
+
+    for index, layer in enumerate(payload.layers or []):
+        if _is_ignored_stackup_layer(layer):
+            continue
+        if layer.conductor:
+            conductivity = _conductivity_to_si(layer.electrical_conductivity)
+            key = ("metal", _material_key_value(conductivity), "")
+            if key in material_ids_by_key:
+                continue
+            material_name = f"Metal{metal_index}"
+            metal_index += 1
+            material_id = semantic_id("material", material_name)
+            material_ids_by_key[key] = material_id
+            materials.append(
+                SemanticMaterial(
+                    id=material_id,
+                    name=material_name,
+                    role="metal",
+                    conductivity=conductivity,
+                    source=source_ref(
+                        "alg", f"layers[{index}].material", layer.material
+                    ),
+                )
+            )
+            continue
+
+        if not _is_dielectric_layer(layer):
+            continue
+        permittivity = _number_text(layer.dielectric_constant)
+        loss_tangent = _number_text(layer.loss_tangent)
+        key = (
+            "dielectric",
+            _material_key_value(permittivity),
+            _material_key_value(loss_tangent),
+        )
+        if key in material_ids_by_key:
+            continue
+        material_name = f"Dielectric{dielectric_index}"
+        dielectric_index += 1
+        material_id = semantic_id("material", material_name)
+        material_ids_by_key[key] = material_id
+        materials.append(
+            SemanticMaterial(
+                id=material_id,
+                name=material_name,
+                role="dielectric",
+                permittivity=permittivity,
+                dielectric_loss_tangent=loss_tangent,
+                source=source_ref("alg", f"layers[{index}].material", layer.material),
+            )
+        )
+
+    return materials, material_ids_by_key
+
+
+def _semantic_layers(
+    payload: ALGLayout, material_ids_by_key: dict[tuple[str, str, str], str]
+) -> list[SemanticLayer]:
     layers: list[SemanticLayer] = []
     conductor_layers = [layer for layer in payload.layers or [] if layer.conductor]
     conductor_count = len(conductor_layers)
     conductor_index = 0
+    dielectric_index = 0
     for index, layer in enumerate(payload.layers or []):
-        if not layer.conductor or not layer.name:
+        if _is_ignored_stackup_layer(layer):
             continue
-        role = _layer_role(layer.layer_type, layer.use_kind, layer.shield_layer)
-        side = side_from_layer_name(layer.name)
-        if side is None:
-            if conductor_index == 0:
-                side = "top"
-            elif conductor_index == conductor_count - 1:
-                side = "bottom"
-            else:
-                side = "internal"
+        if layer.conductor:
+            if not layer.name:
+                continue
+            name = layer.name
+            role = _layer_role(layer.layer_type, layer.use_kind, layer.shield_layer)
+            side = side_from_layer_name(name)
+            if side is None:
+                if conductor_index == 0:
+                    side = "top"
+                elif conductor_index == conductor_count - 1:
+                    side = "bottom"
+                else:
+                    side = "internal"
+            material_key = (
+                "metal",
+                _material_key_value(_conductivity_to_si(layer.electrical_conductivity)),
+                "",
+            )
+            conductor_index += 1
+        elif _is_dielectric_layer(layer):
+            name = layer.name or f"D{dielectric_index}"
+            role = "dielectric"
+            side = None
+            material_key = (
+                "dielectric",
+                _material_key_value(_number_text(layer.dielectric_constant)),
+                _material_key_value(_number_text(layer.loss_tangent)),
+            )
+            dielectric_index += 1
+        else:
+            continue
+
         layers.append(
             SemanticLayer(
-                id=semantic_id("layer", layer.name, index),
-                name=layer.name,
+                id=semantic_id("layer", name, index),
+                name=name,
                 layer_type=layer.layer_type,
                 role=role,
                 side=side,
                 order_index=len(layers),
                 material=layer.material,
+                material_id=material_ids_by_key.get(material_key),
                 thickness=layer.thickness,
-                source=source_ref("alg", f"layers[{index}]", layer.name),
+                source=source_ref("alg", f"layers[{index}]", name),
             )
         )
-        conductor_index += 1
     return layers
+
+
+def _is_ignored_stackup_layer(layer) -> bool:
+    layer_type = (layer.layer_type or "").casefold()
+    material = (layer.material or "").casefold()
+    thickness = _number_text(layer.thickness)
+    return (
+        layer_type == "surface"
+        and material == "air"
+        and (thickness is None or abs(thickness) <= 1e-12)
+    )
+
+
+def _is_dielectric_layer(layer) -> bool:
+    return not layer.conductor and (layer.layer_type or "").casefold() == "dielectric"
+
+
+def _material_key_value(value: float | None) -> str:
+    if value is None:
+        return ""
+    return f"{value:.12g}"
+
+
+def _conductivity_to_si(value: str | None) -> float | None:
+    number = _number_text(value)
+    if number is None:
+        return None
+    text = (value or "").casefold()
+    if "mho/cm" in text or "s/cm" in text:
+        return number * 100.0
+    return number
 
 
 def _layer_role(
@@ -353,6 +482,7 @@ def _semantic_pins_and_pads(
     source_pads_by_refdes_pin: dict[tuple[str, str], list[ALGPad]],
     components_by_refdes: dict[str, ALGComponent],
     component_ids_by_refdes: dict[str, str],
+    component_layers_by_refdes: dict[str, str],
     footprint_ids_by_name: dict[str, str],
     net_ids_by_name: dict[str, str],
     top_layer: str | None,
@@ -374,7 +504,8 @@ def _semantic_pins_and_pads(
             else "ALG_FOOTPRINT"
         )
         footprint_id = footprint_ids_by_name.get(footprint_name)
-        net_id = net_ids_by_name.get(pin.net_name or "")
+        pin_layer_name = component_layers_by_refdes.get(refdes) or top_layer
+        net_id = net_ids_by_name.get(_alg_net_name(pin.net_name))
         pin_id = semantic_id("pin", f"{refdes}:{pin_number}", index)
         pin_ids_by_key[(refdes, pin_number)] = pin_id
         matching_pads = source_pads_by_refdes_pin.get((refdes, pin_number), [])
@@ -397,7 +528,8 @@ def _semantic_pins_and_pads(
                     footprint_id=footprint_id,
                     component_id=component_id,
                     pin_id=pin_id,
-                    net_id=net_ids_by_name.get(source_pad.net_name or "") or net_id,
+                    net_id=net_ids_by_name.get(_alg_net_name(source_pad.net_name))
+                    or net_id,
                     layer_name=source_pad.layer_name or top_layer,
                     position=_xy_point(source_pad.x, source_pad.y)
                     or _xy_point(pin.x, pin.y),
@@ -463,7 +595,7 @@ def _semantic_pins_and_pads(
                 component_id=component_id,
                 net_id=net_id,
                 pad_ids=pad_ids,
-                layer_name=top_layer,
+                layer_name=pin_layer_name,
                 position=_xy_point(pin.x, pin.y),
                 source=source_ref("alg", "pins", f"{refdes}:{pin_number}"),
             )
@@ -479,22 +611,38 @@ def _semantic_via_templates(
 ) -> tuple[list[SemanticViaTemplate], dict[str, str]]:
     default_via_size = _default_size_from_mils(payload, DEFAULT_VIA_SIZE_MIL)
     via_shapes_by_stack: dict[str, ALGShape] = {}
+    via_layers_by_stack: dict[str, list[str]] = defaultdict(list)
     for via in payload.vias or []:
-        if via.pad_stack_name and via.shape is not None:
-            via_shapes_by_stack.setdefault(via.pad_stack_name, via.shape)
-
-    padstacks_by_name = {
-        padstack.name: padstack for padstack in payload.padstacks or [] if padstack.name
-    }
-    via_templates: list[SemanticViaTemplate] = []
-    ids_by_name: dict[str, str] = {}
-    for index, padstack_name in enumerate(
-        sorted({via.pad_stack_name for via in payload.vias or [] if via.pad_stack_name})
-    ):
+        padstack_name = via.pad_stack_name
         if not padstack_name:
             continue
+        if via.shape is not None:
+            via_shapes_by_stack.setdefault(padstack_name, via.shape)
+        for layer_name in via.layer_names:
+            unique_append(via_layers_by_stack[padstack_name], layer_name)
+
+    pad_shapes_by_stack: dict[str, ALGShape] = {}
+    for pad in payload.pads or []:
+        if (
+            pad.pad_stack_name
+            and pad.shape is not None
+            and _is_regular_pad_type(pad.pad_type)
+        ):
+            pad_shapes_by_stack.setdefault(pad.pad_stack_name, pad.shape)
+
+    padstacks_by_name = _padstacks_by_name(payload.padstacks or [], metal_layer_names)
+    padstack_names = _via_template_padstack_names(payload, padstacks_by_name)
+    via_templates: list[SemanticViaTemplate] = []
+    ids_by_name: dict[str, str] = {}
+    for index, padstack_name in enumerate(padstack_names):
+        if not padstack_name:
+            continue
+        padstack = padstacks_by_name.get(padstack_name)
+        pad_shape = via_shapes_by_stack.get(padstack_name) or pad_shapes_by_stack.get(
+            padstack_name
+        )
         pad_shape_id = _shape_id_for_alg_shape(
-            via_shapes_by_stack.get(padstack_name),
+            pad_shape,
             shapes,
             shape_ids_by_key,
             source_path="vias.shape",
@@ -502,11 +650,16 @@ def _semantic_via_templates(
             default_size=default_via_size,
         )
         barrel_shape_id = _shape_id_for_padstack_barrel(
-            padstacks_by_name.get(padstack_name),
-            via_shapes_by_stack.get(padstack_name),
+            padstack,
+            pad_shape,
             shapes,
             shape_ids_by_key,
             default_size=default_via_size,
+        )
+        layer_names = _via_template_layer_names(
+            padstack,
+            metal_layer_names,
+            via_layers_by_stack.get(padstack_name),
         )
         template_id = semantic_id("via_template", padstack_name, index)
         ids_by_name[padstack_name] = template_id
@@ -520,10 +673,10 @@ def _semantic_via_templates(
                         layer_name=layer_name,
                         pad_shape_id=pad_shape_id,
                     )
-                    for layer_name in metal_layer_names
+                    for layer_name in layer_names
                 ],
                 geometry=SemanticViaTemplateGeometry(
-                    source="alg_via_class",
+                    source="alg_padstack",
                     symbol=padstack_name,
                 ),
                 source=source_ref("alg", "padstacks", padstack_name),
@@ -532,8 +685,88 @@ def _semantic_via_templates(
     return via_templates, ids_by_name
 
 
+def _padstacks_by_name(
+    padstacks: Iterable[ALGPadstack],
+    metal_layer_names: list[str],
+) -> dict[str, ALGPadstack]:
+    result: dict[str, ALGPadstack] = {}
+    scores: dict[str, int] = {}
+    for padstack in padstacks:
+        if not padstack.name:
+            continue
+        score = len(_via_template_layer_names(padstack, metal_layer_names, None))
+        existing_score = scores.get(padstack.name, -1)
+        if score > existing_score:
+            result[padstack.name] = padstack
+            scores[padstack.name] = score
+    return result
+
+
+def _via_template_padstack_names(
+    payload: ALGLayout,
+    padstacks_by_name: dict[str, ALGPadstack],
+) -> list[str]:
+    names: list[str] = []
+    for via in payload.vias or []:
+        unique_append(names, via.pad_stack_name)
+    for pad in payload.pads or []:
+        padstack_name = pad.pad_stack_name
+        if not padstack_name:
+            continue
+        if _padstack_spans_multiple_metal_layers(padstacks_by_name.get(padstack_name)):
+            unique_append(names, padstack_name)
+    for pin in payload.pins or []:
+        padstack_name = pin.pad_stack_name
+        if not padstack_name:
+            continue
+        if _padstack_spans_multiple_metal_layers(padstacks_by_name.get(padstack_name)):
+            unique_append(names, padstack_name)
+    return names
+
+
+def _via_template_layer_names(
+    padstack: ALGPadstack | None,
+    metal_layer_names: list[str],
+    fallback_layer_names: Iterable[str] | None,
+) -> list[str]:
+    layer_index = {
+        layer_name.casefold(): index
+        for index, layer_name in enumerate(metal_layer_names)
+    }
+    if padstack:
+        start_index = layer_index.get((padstack.start_layer or "").casefold())
+        end_index = layer_index.get((padstack.end_layer or "").casefold())
+        if start_index is not None and end_index is not None:
+            first = min(start_index, end_index)
+            last = max(start_index, end_index)
+            return metal_layer_names[first : last + 1]
+
+    fallback = {layer_name.casefold() for layer_name in fallback_layer_names or []}
+    if fallback:
+        layer_names = [
+            layer_name
+            for layer_name in metal_layer_names
+            if layer_name.casefold() in fallback
+        ]
+        if layer_names:
+            return layer_names
+    return list(metal_layer_names)
+
+
+def _padstack_spans_multiple_metal_layers(padstack: ALGPadstack | None) -> bool:
+    if padstack is None:
+        return False
+    start_layer = (padstack.start_layer or "").casefold()
+    end_layer = (padstack.end_layer or "").casefold()
+    return bool(start_layer and end_layer and start_layer != end_layer)
+
+
+def _is_regular_pad_type(pad_type: str | None) -> bool:
+    return not pad_type or pad_type.casefold() == "regular"
+
+
 def _shape_id_for_padstack_barrel(
-    padstack,
+    padstack: ALGPadstack | None,
     via_shape: ALGShape | None,
     shapes: list[SemanticShape],
     shape_ids_by_key: dict[tuple[str, tuple[float, ...]], str],
@@ -572,11 +805,82 @@ def _semantic_vias(
                 id=semantic_id("via", via.key, index),
                 name=via.pad_stack_name,
                 template_id=template_id,
-                net_id=net_ids_by_name.get(via.net_name or ""),
+                net_id=net_ids_by_name.get(_alg_net_name(via.net_name)),
                 layer_names=via.layer_names or metal_layer_names,
                 position=SemanticPoint(x=via.x, y=via.y),
                 geometry=SemanticViaGeometry(rotation=0),
                 source=source_ref("alg", "vias", via.key),
+            )
+        )
+    vias.extend(
+        _semantic_padstack_hole_vias(
+            payload,
+            metal_layer_names,
+            net_ids_by_name,
+            via_template_ids,
+            start_index=len(vias),
+        )
+    )
+    return vias
+
+
+def _semantic_padstack_hole_vias(
+    payload: ALGLayout,
+    metal_layer_names: list[str],
+    net_ids_by_name: dict[str, str],
+    via_template_ids: dict[str, str],
+    *,
+    start_index: int,
+) -> list[SemanticVia]:
+    padstacks_by_name = _padstacks_by_name(payload.padstacks or [], metal_layer_names)
+    seen: set[tuple[str, str, str, float, float]] = set()
+    vias: list[SemanticVia] = []
+    for pad in payload.pads or []:
+        if (
+            not pad.pad_stack_name
+            or pad.pin_number
+            or pad.x is None
+            or pad.y is None
+            or not _is_regular_pad_type(pad.pad_type)
+        ):
+            continue
+        padstack = padstacks_by_name.get(pad.pad_stack_name)
+        if not _padstack_spans_multiple_metal_layers(padstack):
+            continue
+        template_id = via_template_ids.get(pad.pad_stack_name)
+        if not template_id:
+            continue
+        net_name = _alg_net_name(pad.net_name)
+        net_id = net_ids_by_name.get(net_name)
+        key = (
+            pad.pad_stack_name,
+            pad.refdes or "",
+            net_name,
+            round(pad.x, 9),
+            round(pad.y, 9),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        index = start_index + len(vias)
+        vias.append(
+            SemanticVia(
+                id=semantic_id("via", f"pad:{pad.pad_stack_name}:{index}"),
+                name=pad.pad_stack_name,
+                template_id=template_id,
+                net_id=net_id,
+                layer_names=_via_template_layer_names(
+                    padstack,
+                    metal_layer_names,
+                    None,
+                ),
+                position=SemanticPoint(x=pad.x, y=pad.y),
+                geometry=SemanticViaGeometry(rotation=0),
+                source=source_ref(
+                    "alg",
+                    "pads",
+                    f"{pad.refdes or ''}:{pad.pad_stack_name}:{pad.x}:{pad.y}",
+                ),
             )
         )
     return vias
@@ -897,6 +1201,105 @@ def _shape_id(
 
 
 def _board_outline(payload: ALGLayout):
+    selected = _selected_outline_group(payload.outlines or [])
+    if selected:
+        values = _outline_group_values(selected)
+        if values:
+            return {
+                "kind": "polygon",
+                "auroradb_type": "Polygon",
+                "source": "alg_board_geometry_outline",
+                "values": [len(values), *values, "Y", "Y"],
+            }
+    return _board_extents_outline(payload)
+
+
+def _selected_outline_group(outlines) -> list:
+    groups: dict[str, list] = defaultdict(list)
+    first_index: dict[str, int] = {}
+    for index, outline in enumerate(outlines):
+        if outline.kind not in {"line", "arc"}:
+            continue
+        if outline.start is None or outline.end is None:
+            continue
+        group_id = _track_group_id(outline.record_tag)
+        if group_id is None:
+            continue
+        groups[group_id].append(outline)
+        first_index.setdefault(group_id, index)
+    candidates = [
+        group for group in groups.values() if len(group) >= 3 and _outline_bbox(group)
+    ]
+    if not candidates:
+        return []
+    return max(
+        candidates,
+        key=lambda group: (
+            _outline_area(group),
+            len(group),
+            -first_index.get(_track_group_id(group[0].record_tag) or "", 0),
+        ),
+    )
+
+
+def _outline_group_values(group: list) -> list[str]:
+    first = group[0].start
+    if first is None:
+        return []
+    values = [_outline_point_value(first)]
+    for index, outline in enumerate(group):
+        end = outline.end
+        if end is None:
+            continue
+        closing = index == len(group) - 1 and _same_alg_point(end, first)
+        if outline.kind == "arc" and outline.center is not None:
+            values.append(
+                _outline_arc_value(
+                    end,
+                    outline.center,
+                    "N" if outline.clockwise else "Y",
+                )
+            )
+        elif not closing:
+            values.append(_outline_point_value(end))
+    return values
+
+
+def _outline_bbox(group: list) -> tuple[float, float, float, float] | None:
+    xs: list[float] = []
+    ys: list[float] = []
+    for outline in group:
+        for point in [outline.start, outline.end, outline.center]:
+            if point is None:
+                continue
+            xs.append(point.x)
+            ys.append(point.y)
+    if not xs or not ys:
+        return None
+    return min(xs), min(ys), max(xs), max(ys)
+
+
+def _outline_area(group: list) -> float:
+    bbox = _outline_bbox(group)
+    if bbox is None:
+        return 0.0
+    x_min, y_min, x_max, y_max = bbox
+    return abs((x_max - x_min) * (y_max - y_min))
+
+
+def _same_alg_point(left: ALGPoint, right: ALGPoint) -> bool:
+    return abs(left.x - right.x) <= 1e-9 and abs(left.y - right.y) <= 1e-9
+
+
+def _outline_point_value(point: ALGPoint) -> str:
+    return f"({point.x},{point.y})"
+
+
+def _outline_arc_value(end: ALGPoint, center: ALGPoint, direction: str) -> str:
+    return f"({end.x},{end.y},{center.x},{center.y},{direction})"
+
+
+def _board_extents_outline(payload: ALGLayout):
     board = payload.board
     if board is None or board.extents is None:
         return {}

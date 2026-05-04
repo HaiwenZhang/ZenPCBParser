@@ -104,15 +104,18 @@ def _with_generated_dielectrics(layers: list[_ExportLayer]) -> list[_ExportLayer
     return result
 
 
-def _stackup_dat(layers: list[_ExportLayer]) -> str:
-    lines = ["Stackup {", "    Unit mil"]
+def _stackup_dat(layers: list[_ExportLayer], *, design_name: str | None = None) -> str:
+    lines = ["Stackup {"]
+    if design_name:
+        lines.append(f"Design {design_name}")
+    lines.append("Unit mil")
     for layer in layers:
         thickness = _format_number(layer.thickness_mil)
         if layer.kind == "Metal":
-            sigma = _format_scalar(
+            sigma = _format_stackup_scalar(
                 _material_property(layer, "conductivity", DEFAULT_CONDUCTIVITY)
             )
-            lines.append(f"    Metal {layer.name} {thickness} {sigma}")
+            lines.append(f"Metal {layer.name} {thickness} {sigma}")
         else:
             eps_r = _format_scalar(
                 _material_property(layer, "permittivity", DEFAULT_PERMITTIVITY)
@@ -122,12 +125,18 @@ def _stackup_dat(layers: list[_ExportLayer]) -> str:
                     layer, "dielectric_loss_tangent", DEFAULT_DIELECTRIC_LOSS_TANGENT
                 )
             )
-            material_suffix = "" if layer.generated else f" {layer.material_name}"
-            lines.append(
-                f"    Dielectric {layer.name} {thickness} {eps_r} {delta}{material_suffix}"
-            )
+            lines.append(f"Dielectric {layer.name} {thickness} {eps_r} {delta}")
     lines.append("}")
     return "\n".join(lines) + "\n"
+
+
+def _format_stackup_scalar(value: Any) -> str:
+    number = _number(value)
+    if number is None:
+        return str(value)
+    if abs(number) >= 1_000_000:
+        return f"{number:.6g}".replace("e+", "e").replace("e0", "e")
+    return _format_number(number)
 
 
 def _stackup_json(layers: list[_ExportLayer]) -> dict[str, Any]:

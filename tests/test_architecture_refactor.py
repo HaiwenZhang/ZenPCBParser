@@ -212,7 +212,7 @@ class ArchitectureRefactorTests(unittest.TestCase):
             )
         ]
 
-        self.assertIn("Metal TOP 1.2 58000000", _stackup_dat(layers))
+        self.assertIn("Metal TOP 1.2 5.8e7", _stackup_dat(layers))
         payload = _stackup_json(layers)
         self.assertEqual(payload["version"], "1.1")
         self.assertEqual(payload["layers"][0]["roughness"], {"type": "no"})

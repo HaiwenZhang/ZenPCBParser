@@ -71,6 +71,26 @@ AEDB_COMPONENT_MATCH_TOLERANCE_MIL = 1e-3
 logger = logging.getLogger("aurora_translator.targets.auroradb")
 
 
+def _library_unit(board: SemanticBoard) -> str:
+    return "mm" if _preserve_board_units(board) else "mil"
+
+
+def _part_geometry_source_unit(board: SemanticBoard) -> str | None:
+    return None if _preserve_board_units(board) else board.units
+
+
+def _preserve_board_units(board: SemanticBoard) -> bool:
+    source_format = (board.metadata.source_format or "").casefold()
+    unit = (board.units or "").casefold()
+    return source_format in {"alg", "brd"} and unit in {
+        "mm",
+        "millimeter",
+        "millimeters",
+        "millimetre",
+        "millimetres",
+    }
+
+
 def _aaf_text(lines: list[str]) -> str:
     return "\n".join(lines) + "\n"
 
@@ -88,7 +108,8 @@ def _design_part_lines(
     aedb_plan: _AedbExportPlan | None = None,
     part_export_plan: _PartExportPlan | None = None,
 ) -> list[str]:
-    lines = ["library set -unit <mil>"]
+    geometry_source_unit = _part_geometry_source_unit(board)
+    lines = [f"library set -unit <{_library_unit(board)}>"]
     components_by_id = {component.id: component for component in board.components}
     pad_shape_ids = _pad_shape_ids_by_definition(board)
     if aedb_plan is not None:
@@ -118,7 +139,7 @@ def _design_part_lines(
                         variant.footprint_name,
                         board,
                         pad_shape_ids,
-                        source_unit=board.units,
+                        source_unit=geometry_source_unit,
                         normalize_rotation=variant.canonical_rotation,
                         source_format=board.metadata.source_format,
                     )
@@ -157,7 +178,7 @@ def _design_part_lines(
         footprint = footprints_by_name.get(source_footprint_name.casefold())
         lines.extend(
             _footprint_geometry_commands(
-                footprint, footprint_name, source_unit=board.units
+                footprint, footprint_name, source_unit=geometry_source_unit
             )
         )
 
@@ -177,7 +198,7 @@ def _design_part_lines(
                     board,
                     pad_shape_ids,
                     source_footprint_name=variant.source_footprint_name,
-                    source_unit=board.units,
+                    source_unit=geometry_source_unit,
                     source_format=board.metadata.source_format,
                 )
             )
@@ -187,11 +208,23 @@ def _design_part_lines(
             for component_id in variant.component_ids
             if component_id in components_by_id
         ]
+        part_type = (
+            ""
+            if _minimal_part_info(board)
+            else _part_type_for_components(variant_components)
+        )
+        part_description = (
+            ""
+            if _minimal_part_info(board)
+            else _part_description_for_components(
+                variant_components, variant.source_footprint_name or footprint_name
+            )
+        )
         lines.append(
             "library add "
             f"-p <{_quote_aaf(part_name)}> "
-            f"-t <{_quote_aaf(_part_type_for_components(variant_components))}> "
-            f"-d <{_quote_aaf(_part_description_for_components(variant_components, variant.source_footprint_name or footprint_name))}> "
+            f"-t <{_quote_aaf(part_type)}> "
+            f"-d <{_quote_aaf(part_description)}> "
             f"-footprint <{_quote_aaf(footprint_name)}>"
             f"{_part_attribute_options(_part_attributes_for_components(variant, variant_components, board))}"
         )
@@ -221,6 +254,7 @@ def _build_direct_parts_block(
             if footprint.name
         },
     )
+    geometry_source_unit = _part_geometry_source_unit(board)
 
     if aedb_plan is not None:
         part_names_by_component_id = {
@@ -250,7 +284,7 @@ def _build_direct_parts_block(
                     board,
                     pad_shape_ids,
                     indexes,
-                    source_unit=board.units,
+                    source_unit=geometry_source_unit,
                     normalize_rotation=variant.canonical_rotation,
                     source_format=board.metadata.source_format,
                 )
@@ -298,7 +332,7 @@ def _build_direct_parts_block(
                 pad_shape_ids,
                 indexes,
                 source_footprint_name=variant.source_footprint_name,
-                source_unit=board.units,
+                source_unit=geometry_source_unit,
                 source_format=board.metadata.source_format,
             )
             emitted_footprint_pads.add(footprint_key)
@@ -310,11 +344,21 @@ def _build_direct_parts_block(
         part = builder.find_or_create_part(part_name)
         info = part.get_block("PartInfo")
         if info is not None:
-            info.replace_item("Type", _part_type_for_components(variant_components))
+            info.replace_item(
+                "Type",
+                ""
+                if _minimal_part_info(board)
+                else _part_type_for_components(variant_components),
+            )
             info.replace_item(
                 "Description",
-                _part_description_for_components(
-                    variant_components, variant.source_footprint_name or footprint_name
+                (
+                    ""
+                    if _minimal_part_info(board)
+                    else _part_description_for_components(
+                        variant_components,
+                        variant.source_footprint_name or footprint_name,
+                    )
                 ),
             )
             attributes = _part_attributes_for_components(
@@ -887,7 +931,7 @@ def _component_footprint_pad_score(
 
 
 def _source_prefers_component_footprint_pads(source_format: str | None) -> bool:
-    return (source_format or "").casefold() in {"odbpp", "alg"}
+    return (source_format or "").casefold() in {"odbpp"}
 
 
 def _package_footprint_pad_commands(
@@ -1412,6 +1456,9 @@ def _part_attributes_for_components(
     components: list[SemanticComponent],
     board: SemanticBoard,
 ) -> dict[str, str]:
+    if _minimal_part_info(board):
+        return _minimal_component_part_attributes(components)
+
     source_footprint_name = variant.source_footprint_name or variant.footprint_name
     attributes: dict[str, str] = {
         "PART_NAME": variant.source_part_name,
@@ -1459,6 +1506,41 @@ def _part_attributes_for_components(
             if value not in {None, ""}:
                 attributes.setdefault(str(key), str(value))
     return dict(sorted(attributes.items(), key=lambda item: item[0].casefold()))
+
+
+def _minimal_part_info(board: SemanticBoard) -> bool:
+    return (board.metadata.source_format or "").casefold() == "alg"
+
+
+def _minimal_component_part_attributes(
+    components: list[SemanticComponent],
+) -> dict[str, str]:
+    value = _first_component_value(components)
+    part_number = _first_component_attribute(components, "part_number")
+    return {
+        "Value": value.replace("-", "_") if value else "",
+        "PART_NUMBER": part_number or "",
+    }
+
+
+def _first_component_value(components: list[SemanticComponent]) -> str:
+    for component in components:
+        if component.value not in {None, ""}:
+            return str(component.value)
+    return ""
+
+
+def _first_component_attribute(
+    components: list[SemanticComponent], attribute_name: str
+) -> str:
+    for component in components:
+        attributes = getattr(component, "attributes", {})
+        if not isinstance(attributes, dict):
+            continue
+        value = attributes.get(attribute_name)
+        if value not in {None, ""}:
+            return str(value)
+    return ""
 
 
 def _common_component_attributes(components: list[SemanticComponent]) -> dict[str, str]:

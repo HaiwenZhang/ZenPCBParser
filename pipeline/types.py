@@ -6,7 +6,7 @@ from typing import Literal
 
 
 SourceFormat = Literal["aedb", "auroradb", "odbpp", "brd", "alg"]
-TargetFormat = Literal["aaf", "auroradb"]
+TargetFormat = Literal["aaf", "auroradb", "odbpp"]
 AEDBParseProfile = Literal["full", "auroradb-minimal"]
 
 

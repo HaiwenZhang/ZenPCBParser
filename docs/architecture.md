@@ -45,7 +45,7 @@ flowchart TD
 
     sources["sources/*<br/>AEDB / AuroraDB / ODB++ / BRD / ALG"]
     semantic["semantic/*<br/>SemanticBoard + adapters + passes"]
-    targets["targets/auroradb/*<br/>AuroraDB 导出（AAF 可选）"]
+    targets["targets/*<br/>AuroraDB / ODB++ 导出"]
     rust["crates/*_parser<br/>Rust ODB++ / BRD / ALG parsers"]
 
     cli --> convert
@@ -70,9 +70,11 @@ flowchart TD
 | `sources/alg/` | Cadence Allegro extracta ALG Python 集成层，优先调用 Rust native 模块，必要时回退到 CLI，校验 `ALGLayout` 并导出 schema。 |
 | `semantic/` | 统一 `SemanticBoard`、格式 adapter、连接图和语义诊断。 |
 | `targets/auroradb/` | `SemanticBoard -> AuroraDB` 导出链路；AAF 只作为内部中间层或显式导出产物；`exporter.py` 只做顶层编排，`plan.py` 保存导出索引，`direct.py` 保存 direct AuroraDB builder 状态，`layout.py` 保存 `layout.db` / `design.layout` 写出，`parts.py` 保存 `parts.db` / `design.part` 写出和 part/footprint plan，`geometry.py` 保存 shape / via / trace / polygon geometry 命令与 payload，`stackup.py` 保存 stackup planning/serialization，`formatting.py` 保存单位/数值/旋转格式化 helper，`names.py` 保存命名和 AAF quoting helper。 |
+| `targets/odbpp/` | `SemanticBoard -> ODB++` Python target wrapper，负责把 Semantic JSON 交给 Rust `odbpp_exporter` CLI 并接入 `convert --to odbpp`。 |
 | `pipeline/` | `source -> semantic -> target` 主流程编排。 |
 | `shared/` | 日志、性能统计、JSON 输出等共享工具。 |
 | `crates/odbpp_parser/` | Rust ODB++ 解析核心，同时提供 CLI 和 PyO3 native 模块，负责读取目录/归档和解析 ODB++ 文本记录；summary-only、显式 step 和默认 auto-step details 路径会跳过非必要明细文件。 |
+| `crates/odbpp_exporter/` | Rust ODB++ target exporter，读取 `SemanticBoard` JSON 并写出 deterministic ODB++ 目录结构；`writer.rs` 作为模块入口，`writer/entity.rs`、`writer/features.rs`、`writer/attributes.rs`、`writer/components.rs`、`writer/package.rs`、`writer/eda_data.rs`、`writer/netlist.rs`、`writer/formatting.rs` 和 `writer/model.rs` 分别承载 entity 编排、feature records、attribute tables/layer attrlist、component records、EDA package records、EDA data、cadnet netlist、ODB++ 命名/格式化和 Semantic 输入模型。 |
 | `crates/brd_parser/` | Rust Allegro BRD 二进制解析核心，同时提供 CLI 和 PyO3 native 模块，负责解析 header、string table、对象块摘要和已建模的板级对象。 |
 | `crates/alg_parser/` | Rust Allegro extracta ALG 文本解析核心，同时提供 CLI 和 PyO3 native 模块，负责流式解析 section header、board、layer、component、pin、padstack、pad、via、track、symbol 和 outline 记录。 |
 | `cli/` | 新的 `convert / inspect / dump / schema` 命令，以及保留的兼容命令。 |
@@ -94,7 +96,7 @@ uv run python .\main.py ...
 | --- | --- | --- |
 | `main.py <path-to-board.aedb>` | `cli/main.py` | 默认 AEDB 解析路径。 |
 | `main.py --print-schema` | `cli/main.py` | 输出 AEDB JSON schema。 |
-| `main.py convert ...` | `cli/convert.py` | 推荐主流程，直接走 `source -> SemanticBoard -> target`。 |
+| `main.py convert ...` | `cli/convert.py` | 推荐主流程，直接走 `source -> SemanticBoard -> target`，当前 target 包含 `aaf`、`auroradb` 和 `odbpp`。 |
 | `main.py inspect ...` | `cli/inspect.py` | inspect source / AAF。 |
 | `main.py dump ...` | `cli/dump.py` | 显式导出 source JSON / semantic JSON。 |
 | `main.py schema ...` | `cli/schema.py` | 统一导出 schema。 |
@@ -239,7 +241,7 @@ flowchart LR
     source --> adapter --> model --> pass --> json
 ```
 
-当前 semantic 模型包含 layer、material、shape、via template、net、component、footprint、pin、pad、via、primitive、board outline/profile geometry、connectivity 和 diagnostics。footprint、via template、pad、via、primitive 和 board outline 的 `geometry` 已收敛为 typed hint model，并保留 `extra` escape hatch 来承载源格式 metadata；下游仍通过 `.get()` 读取声明字段或兼容 metadata。每个对象都有 `SourceRef`，可以追踪回源格式字段。语义层本身只保留统一模型和 adapter/pass；真正的 Aurora/AAF / AuroraDB 目标导出实现已经收敛到 `targets/auroradb/`。该导出链默认会把统一模型中的叠层、材料、shape、via template、component、pin、带 net trace、带 net arc、带 net polygon、board outline 和 footprint body 语义直接写成 AuroraDB 输出目录中的 `layout.db`、`parts.db`、`layers/`，并保留 `stackup.dat`、`stackup.json`；只有显式要求时才额外保留 `aaf/design.layout`、`aaf/design.part`。其中 signal/plane layer 会进入 AuroraDB metal layer 结构，dielectric layer 会进入 stackup 文件。对于来自 AEDB 的语义 payload，当原始 AEDB component transform 不能保留规范化 footprint 朝向时，Aurora/AAF exporter 还会基于 pad 拓扑反推 component placement rotation，并按需拆分 part/footprint variant。
+当前 semantic 模型包含 layer、material、shape、via template、net、component、footprint、pin、pad、via、primitive、board outline/profile geometry、connectivity 和 diagnostics。footprint、via template、pad、via、primitive 和 board outline 的 `geometry` 已收敛为 typed hint model，并保留 `extra` escape hatch 来承载源格式 metadata；下游仍通过 `.get()` 读取声明字段或兼容 metadata。每个对象都有 `SourceRef`，可以追踪回源格式字段。语义层本身只保留统一模型和 adapter/pass；Aurora/AAF / AuroraDB 目标导出实现收敛到 `targets/auroradb/`，ODB++ 目标导出通过 `targets/odbpp/` 调用 Rust `crates/odbpp_exporter/`。AuroraDB 导出链默认会把统一模型中的叠层、材料、shape、via template、component、pin、带 net trace、带 net arc、带 net polygon、board outline 和 footprint body 语义直接写成 AuroraDB 输出目录中的 `layout.db`、`parts.db`、`layers/`，并保留 `stackup.dat`、`stackup.json`；只有显式要求时才额外保留 `aaf/design.layout`、`aaf/design.part`。其中 signal/plane layer 会进入 AuroraDB metal layer 结构，dielectric layer 会进入 stackup 文件。ODB++ exporter 写出 matrix、step profile、layer features、layer attrlist、components、EDA package/net data 和 cadnet netlist。对于来自 AEDB 的语义 payload，当原始 AEDB component transform 不能保留规范化 footprint 朝向时，Aurora/AAF exporter 还会基于 pad 拓扑反推 component placement rotation，并按需拆分 part/footprint variant。
 
 更细的 semantic 内部架构见：[semantic/docs/architecture.md](../semantic/docs/architecture.md)。
 
@@ -297,18 +299,18 @@ JSON payload 中统一输出：
 
 | 项 | 版本 |
 | --- | --- |
-| Project | `1.0.43` |
+| Project | `1.0.44` |
 | AEDB parser | `0.4.56` |
 | AEDB JSON schema | `0.5.0` |
 | AuroraDB parser | `0.2.13` |
 | AuroraDB JSON schema | `0.2.0` |
 | ODB++ parser | `0.6.3` |
 | ODB++ JSON schema | `0.6.0` |
-| BRD parser | `0.1.4` |
-| BRD JSON schema | `0.3.0` |
+| BRD parser | `0.1.5` |
+| BRD JSON schema | `0.4.0` |
 | ALG parser | `0.1.1` |
 | ALG JSON schema | `0.2.0` |
-| Semantic parser | `0.7.5` |
+| Semantic parser | `0.7.6` |
 | Semantic JSON schema | `0.7.1` |
 
 ## 开发和构建
@@ -334,6 +336,12 @@ $env:PYO3_PYTHON = (Resolve-Path .\.venv\Scripts\python.exe).Path
 $env:VIRTUAL_ENV = (Resolve-Path .\.venv).Path
 $env:PATH = "$env:VIRTUAL_ENV\Scripts;$env:PATH"
 uv tool run --from "maturin>=1.8,<2.0" maturin develop --uv --manifest-path .\crates\odbpp_parser\Cargo.toml --release --features python
+```
+
+Rust ODB++ exporter 检查：
+
+```powershell
+cargo test --manifest-path .\crates\odbpp_exporter\Cargo.toml
 ```
 
 ODB++ 解析：
@@ -404,7 +412,7 @@ flowchart TD
 
     sources["sources/*<br/>AEDB / AuroraDB / ODB++ / BRD / ALG"]
     semantic["semantic/*<br/>SemanticBoard + adapters + passes"]
-    targets["targets/auroradb/*<br/>AuroraDB export (AAF optional)"]
+    targets["targets/*<br/>AuroraDB / ODB++ export"]
     rust["crates/*_parser<br/>Rust ODB++ / BRD / ALG parsers"]
 
     cli --> convert
@@ -429,11 +437,13 @@ flowchart TD
 | `sources/alg/` | Cadence Allegro extracta ALG Python integration layer, native-first Rust parser invocation with CLI fallback, `ALGLayout` validation, and schema export. |
 | `semantic/` | The unified `SemanticBoard`, format adapters, connectivity, and semantic diagnostics. |
 | `targets/auroradb/` | The `SemanticBoard -> AuroraDB` export path, with AAF kept only as an internal or explicitly exported intermediate; `exporter.py` is now top-level orchestration only, `plan.py` owns export indexes, `direct.py` owns direct AuroraDB builder state, `layout.py` owns `layout.db` / `design.layout` emission, `parts.py` owns `parts.db` / `design.part` emission and part/footprint planning, `geometry.py` owns shape / via / trace / polygon geometry commands and payloads, `stackup.py` owns stackup planning/serialization, `formatting.py` owns unit / number / rotation formatting helpers, and `names.py` owns naming plus AAF quoting helpers. |
+| `targets/odbpp/` | The `SemanticBoard -> ODB++` Python target wrapper, which serializes Semantic JSON for the Rust `odbpp_exporter` CLI and wires it into `convert --to odbpp`. |
 | `pipeline/` | The `source -> semantic -> target` orchestration layer. |
 | `shared/` | Shared logging, runtime metrics, JSON output, and utility helpers. |
 | `crates/odbpp_parser/` | Rust ODB++ parser core, CLI, and PyO3 native module for directory/archive reading and ODB++ text record parsing; summary-only, explicit-step, and default auto-step detail paths skip unnecessary detail files. |
 | `crates/brd_parser/` | Rust Allegro BRD binary parser core, CLI, and PyO3 native module for headers, string tables, block summaries, and modeled board objects. |
 | `crates/alg_parser/` | Rust Allegro extracta ALG text parser core, CLI, and PyO3 native module for streaming section headers, boards, layers, components, pins, padstacks, pads, vias, tracks, symbols, and outline records. |
+| `crates/odbpp_exporter/` | Rust ODB++ target exporter that reads `SemanticBoard` JSON and writes a deterministic ODB++ directory; `writer.rs` is the module entry point, with `writer/entity.rs`, `writer/features.rs`, `writer/attributes.rs`, `writer/components.rs`, `writer/package.rs`, `writer/eda_data.rs`, `writer/netlist.rs`, `writer/formatting.rs`, and `writer/model.rs` owning entity orchestration, feature records, attribute tables/layer attrlists, component records, EDA package records, EDA data, cadnet netlists, ODB++ naming/formatting, and the Semantic input model. |
 | `cli/` | The new `convert / inspect / dump / schema` entrypoints plus compatibility commands. |
 | `docs/` | Project-level documentation and project-level changelogs. Format-level documents live under each `*/docs/` directory. |
 
@@ -453,7 +463,7 @@ Current routing:
 | --- | --- | --- |
 | `main.py <path-to-board.aedb>` | `cli/main.py` | Default AEDB parsing path. |
 | `main.py --print-schema` | `cli/main.py` | Print the AEDB JSON schema. |
-| `main.py convert ...` | `cli/convert.py` | Recommended main path: `source -> SemanticBoard -> target`. |
+| `main.py convert ...` | `cli/convert.py` | Recommended main path: `source -> SemanticBoard -> target`; current targets are `aaf`, `auroradb`, and `odbpp`. |
 | `main.py inspect ...` | `cli/inspect.py` | Inspect source files or AAF files. |
 | `main.py dump ...` | `cli/dump.py` | Explicitly export source JSON or semantic JSON. |
 | `main.py schema ...` | `cli/schema.py` | Export machine-readable schemas. |
@@ -598,7 +608,7 @@ flowchart LR
     source --> adapter --> model --> pass --> json
 ```
 
-The current semantic model includes layers, materials, shapes, via templates, nets, components, footprints, pins, pads, vias, primitives, board outline/profile geometry, connectivity, and diagnostics. Footprint, via-template, pad, via, primitive, and board-outline `geometry` fields now use typed hint models with an `extra` escape hatch for source-format metadata; downstream code can still read declared fields and compatible metadata through `.get()`. Every object has a `SourceRef` that can trace it back to the source-format field. The semantic layer itself now focuses on the unified model plus adapters and passes, while the actual Aurora/AAF / AuroraDB target export implementation has been moved into `targets/auroradb/`. By default, that target path writes `layout.db`, `parts.db`, `layers/`, `stackup.dat`, and `stackup.json` directly into the AuroraDB output directory; `aaf/design.layout` and `aaf/design.part` are kept only when requested explicitly. Signal/plane layers enter the AuroraDB metal-layer structure, while dielectric layers stay in the stackup files. For AEDB-derived payloads, the Aurora/AAF exporter also infers component placement rotation and part/footprint variants from pad topology when the raw AEDB component transform does not preserve canonical footprint orientation.
+The current semantic model includes layers, materials, shapes, via templates, nets, components, footprints, pins, pads, vias, primitives, board outline/profile geometry, connectivity, and diagnostics. Footprint, via-template, pad, via, primitive, and board-outline `geometry` fields now use typed hint models with an `extra` escape hatch for source-format metadata; downstream code can still read declared fields and compatible metadata through `.get()`. Every object has a `SourceRef` that can trace it back to the source-format field. The semantic layer itself now focuses on the unified model plus adapters and passes, while the actual Aurora/AAF / AuroraDB target export implementation has been moved into `targets/auroradb/`; ODB++ target export goes through `targets/odbpp/` and Rust `crates/odbpp_exporter/`. By default, the AuroraDB target path writes `layout.db`, `parts.db`, `layers/`, `stackup.dat`, and `stackup.json` directly into the AuroraDB output directory; `aaf/design.layout` and `aaf/design.part` are kept only when requested explicitly. Signal/plane layers enter the AuroraDB metal-layer structure, while dielectric layers stay in the stackup files. The ODB++ exporter writes matrix, step profile, layer features, layer attrlists, components, EDA package/net data, and cadnet netlists. For AEDB-derived payloads, the Aurora/AAF exporter also infers component placement rotation and part/footprint variants from pad topology when the raw AEDB component transform does not preserve canonical footprint orientation.
 
 See [semantic/docs/architecture.md](../semantic/docs/architecture.md) for the detailed semantic architecture.
 
@@ -656,18 +666,18 @@ Current versions:
 
 | Item | Version |
 | --- | --- |
-| Project | `1.0.43` |
+| Project | `1.0.44` |
 | AEDB parser | `0.4.56` |
 | AEDB JSON schema | `0.5.0` |
 | AuroraDB parser | `0.2.13` |
 | AuroraDB JSON schema | `0.2.0` |
 | ODB++ parser | `0.6.3` |
 | ODB++ JSON schema | `0.6.0` |
-| BRD parser | `0.1.4` |
-| BRD JSON schema | `0.3.0` |
+| BRD parser | `0.1.5` |
+| BRD JSON schema | `0.4.0` |
 | ALG parser | `0.1.1` |
 | ALG JSON schema | `0.2.0` |
-| Semantic parser | `0.7.5` |
+| Semantic parser | `0.7.6` |
 | Semantic JSON schema | `0.7.1` |
 
 ## Development And Build
@@ -693,6 +703,12 @@ $env:PYO3_PYTHON = (Resolve-Path .\.venv\Scripts\python.exe).Path
 $env:VIRTUAL_ENV = (Resolve-Path .\.venv).Path
 $env:PATH = "$env:VIRTUAL_ENV\Scripts;$env:PATH"
 uv tool run --from "maturin>=1.8,<2.0" maturin develop --uv --manifest-path .\crates\odbpp_parser\Cargo.toml --release --features python
+```
+
+Rust ODB++ exporter checks:
+
+```powershell
+cargo test --manifest-path .\crates\odbpp_exporter\Cargo.toml
 ```
 
 Parse ODB++:

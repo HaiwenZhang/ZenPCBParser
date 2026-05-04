@@ -7,7 +7,7 @@ document remains `docs/architecture.md`.
 
 Aurora Translator parses PCB source formats into source-specific JSON models,
 normalizes them through `SemanticBoard`, and writes target formats such as
-AuroraDB.
+AuroraDB and ODB++.
 
 Primary flow:
 
@@ -21,11 +21,22 @@ Current source formats:
 - `sources/auroradb/`
 - `sources/odbpp/`
 - `sources/brd/`
+- `sources/alg/`
 
 Current Rust parser cores:
 
 - `crates/odbpp_parser/`
 - `crates/brd_parser/`
+- `crates/alg_parser/`
+
+Current Rust target exporters:
+
+- `crates/odbpp_exporter/`
+
+Current Python target wrappers:
+
+- `targets/auroradb/`
+- `targets/odbpp/`
 
 ## Authoritative References
 
@@ -47,4 +58,5 @@ the owning package or project doc and link to it.
 - Python compile: `uv run python -m compileall <paths>`
 - Rust BRD checks: `cargo test --manifest-path crates/brd_parser/Cargo.toml`
 - Rust ODB++ checks: `cargo test --manifest-path crates/odbpp_parser/Cargo.toml`
+- Rust ODB++ exporter checks: `cargo test --manifest-path crates/odbpp_exporter/Cargo.toml`
 - Project formatting: `uv run ruff format --check .`

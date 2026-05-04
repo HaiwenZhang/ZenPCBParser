@@ -39,6 +39,9 @@ from aurora_translator.semantic.models import (
 )
 
 
+_DEFAULT_SOURCE_UNIT = object()
+
+
 def _direct_location_values(
     x: float,
     y: float,
@@ -321,7 +324,10 @@ def _primitive_commands(
     layer_name_map: dict[str, str],
     net_names_by_id: dict[str, str],
     trace_shape_ids: dict[str, _TraceShape],
+    *,
+    source_unit: str | None | object = _DEFAULT_SOURCE_UNIT,
 ) -> list[str]:
+    source_unit = board.units if source_unit is _DEFAULT_SOURCE_UNIT else source_unit
     commands: list[str] = []
     geometry_index = 1
     for primitive in board.primitives:
@@ -339,7 +345,7 @@ def _primitive_commands(
                 layer_name,
                 trace_shape_ids,
                 start_index=geometry_index,
-                source_unit=board.units,
+                source_unit=source_unit,
             )
             geometry_index += len(trace_commands)
             commands.extend(trace_commands)
@@ -350,7 +356,7 @@ def _primitive_commands(
                 layer_name,
                 trace_shape_ids,
                 geometry_id=f"A{geometry_index}",
-                source_unit=board.units,
+                source_unit=source_unit,
             )
             if arc_command is not None:
                 geometry_index += 1
@@ -361,7 +367,7 @@ def _primitive_commands(
                 net_name,
                 layer_name,
                 geometry_id=f"G{geometry_index}",
-                source_unit=board.units,
+                source_unit=source_unit,
             )
             if polygon_commands:
                 geometry_index += 1
@@ -841,12 +847,15 @@ def _ccw_flag_from_arc_height(arc_height: float) -> str:
     return "Y" if arc_height < 0 else "N"
 
 
-def _outline_command(board: SemanticBoard) -> str:
-    outline_payload = _board_outline_payload(board)
+def _outline_command(
+    board: SemanticBoard, *, source_unit: str | None | object = _DEFAULT_SOURCE_UNIT
+) -> str:
+    source_unit = board.units if source_unit is _DEFAULT_SOURCE_UNIT else source_unit
+    outline_payload = _board_outline_payload(board, source_unit=source_unit)
     if outline_payload is not None:
         return f"layout set -g <{outline_payload}> -profile null"
 
-    points = _board_points(board)
+    points = _board_points(board, source_unit=source_unit)
     if not points:
         x_min, y_min, x_max, y_max = 0.0, 0.0, 1.0, 1.0
     else:
@@ -866,7 +875,10 @@ def _outline_command(board: SemanticBoard) -> str:
     return f"layout set -g <{{0:Polygon,(4,{polygon},Y,Y)}}> -profile null"
 
 
-def _board_outline_payload(board: SemanticBoard) -> str | None:
+def _board_outline_payload(
+    board: SemanticBoard, *, source_unit: str | None | object = _DEFAULT_SOURCE_UNIT
+) -> str | None:
+    source_unit = board.units if source_unit is _DEFAULT_SOURCE_UNIT else source_unit
     outline = board.board_outline or {}
     geometry_type = str(
         outline.get("auroradb_type") or outline.get("kind") or "Polygon"
@@ -874,19 +886,22 @@ def _board_outline_payload(board: SemanticBoard) -> str | None:
     values = outline.get("values")
     if geometry_type.casefold() != "polygon" or not isinstance(values, list):
         return None
-    formatted = _format_polygon_shape_values(values, source_unit=board.units)
+    formatted = _format_polygon_shape_values(values, source_unit=source_unit)
     if not formatted:
         return None
     return f"{{0:Polygon,({','.join(formatted)})}}"
 
 
-def _board_points(board: SemanticBoard) -> list[tuple[float, float]]:
+def _board_points(
+    board: SemanticBoard, *, source_unit: str | None | object = _DEFAULT_SOURCE_UNIT
+) -> list[tuple[float, float]]:
+    source_unit = board.units if source_unit is _DEFAULT_SOURCE_UNIT else source_unit
     points: list[tuple[float, float]] = []
     for primitive in board.primitives:
         bbox = primitive.geometry.get("bbox")
         if isinstance(bbox, list) and len(bbox) >= 4:
             parsed = [
-                _length_to_mil(value, source_unit=board.units) for value in bbox[:4]
+                _length_to_mil(value, source_unit=source_unit) for value in bbox[:4]
             ]
             if all(value is not None and _is_coordinate(value) for value in parsed):
                 x_min, y_min, x_max, y_max = [float(value) for value in parsed]
@@ -894,13 +909,13 @@ def _board_points(board: SemanticBoard) -> list[tuple[float, float]]:
                     [(x_min, y_min), (x_max, y_min), (x_max, y_max), (x_min, y_max)]
                 )
     for point in [component.location for component in board.components]:
-        _append_point(points, point, board.units)
+        _append_point(points, point, source_unit)
     for point in [pin.position for pin in board.pins]:
-        _append_point(points, point, board.units)
+        _append_point(points, point, source_unit)
     for point in [pad.position for pad in board.pads]:
-        _append_point(points, point, board.units)
+        _append_point(points, point, source_unit)
     for point in [via.position for via in board.vias]:
-        _append_point(points, point, board.units)
+        _append_point(points, point, source_unit)
     return points
 
 
@@ -922,15 +937,19 @@ def _aaf_shape_ids(shapes: list[SemanticShape]) -> dict[str, str]:
 
 
 def _aaf_trace_shape_ids(
-    board: SemanticBoard, *, start_index: int
+    board: SemanticBoard,
+    *,
+    start_index: int,
+    source_unit: str | None | object = _DEFAULT_SOURCE_UNIT,
 ) -> dict[str, _TraceShape]:
+    source_unit = board.units if source_unit is _DEFAULT_SOURCE_UNIT else source_unit
     result: dict[str, _TraceShape] = {}
     next_index = start_index
     for primitive in board.primitives:
         if primitive.kind.casefold() not in {"trace", "arc"}:
             continue
         width = _trace_width_mil(
-            primitive.geometry.get("width"), source_unit=board.units
+            primitive.geometry.get("width"), source_unit=source_unit
         )
         if width is None:
             continue

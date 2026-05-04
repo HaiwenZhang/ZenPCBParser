@@ -9,10 +9,11 @@ from aurora_translator.targets.auroradb import (
     write_aaf_from_semantic,
     write_aurora_conversion_package,
 )
+from aurora_translator.targets.odbpp import write_odbpp_from_semantic
 from aurora_translator.shared.logging import log_kv, log_timing
 
 from .loaders import load_source_payload
-from .result import SourceToSemanticResult, SourceToTargetResult
+from .result import SemanticTargetExport, SourceToSemanticResult, SourceToTargetResult
 from .types import SourceFormat, SourceLoadOptions, TargetFormat
 
 
@@ -55,7 +56,7 @@ def convert_semantic_to_target(
     *,
     compile_auroradb: bool | None = None,
     export_aaf: bool = False,
-) -> SemanticAuroraExport:
+) -> SemanticTargetExport:
     resolved_output = Path(output_path).expanduser().resolve()
     log_kv(
         logger,
@@ -98,6 +99,15 @@ def convert_semantic_to_target(
                 compile_auroradb=True if compile_auroradb is None else compile_auroradb,
                 export_aaf=export_aaf,
             )
+
+    if target_format == "odbpp":
+        with log_timing(
+            logger,
+            "export semantic board to ODB++",
+            banner=True,
+            output=resolved_output,
+        ):
+            return write_odbpp_from_semantic(board, resolved_output)
 
     raise ValueError(f"Unsupported target format: {target_format!r}")
 

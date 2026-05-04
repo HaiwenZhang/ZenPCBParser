@@ -10,7 +10,11 @@ pub struct BrdLayout {
     pub layers: Option<Vec<Layer>>,
     pub nets: Option<Vec<Net>>,
     pub padstacks: Option<Vec<Padstack>>,
+    pub components: Option<Vec<Component>>,
+    pub component_instances: Option<Vec<ComponentInstance>>,
     pub footprints: Option<Vec<Footprint>>,
+    pub footprint_instances: Option<Vec<FootprintInstance>>,
+    pub pad_definitions: Option<Vec<PadDefinition>>,
     pub placed_pads: Option<Vec<PlacedPad>>,
     pub vias: Option<Vec<Via>>,
     pub tracks: Option<Vec<Track>>,
@@ -145,6 +149,32 @@ pub struct Padstack {
 }
 
 #[derive(Debug, Clone, Serialize, Default)]
+pub struct Component {
+    pub key: u32,
+    pub next: u32,
+    pub device_type_string_id: u32,
+    pub device_type: Option<String>,
+    pub symbol_name_string_id: u32,
+    pub symbol_name: Option<String>,
+    pub first_instance: u32,
+    pub function_slot: u32,
+    pub pin_number: u32,
+    pub fields: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct ComponentInstance {
+    pub key: u32,
+    pub next: u32,
+    pub footprint_instance: u32,
+    pub refdes_string_id: u32,
+    pub refdes: Option<String>,
+    pub function_instance: u32,
+    pub fields: u32,
+    pub first_pad: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Default)]
 pub struct Footprint {
     pub key: u32,
     pub next: u32,
@@ -154,6 +184,33 @@ pub struct Footprint {
     pub sym_lib_path_string_id: u32,
     pub sym_lib_path: Option<String>,
     pub coords_raw: [u32; 4],
+}
+
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct FootprintInstance {
+    pub key: u32,
+    pub next: u32,
+    pub layer: u8,
+    pub rotation_mdeg: u32,
+    pub x_raw: i32,
+    pub y_raw: i32,
+    pub component_instance: u32,
+    pub graphic: u32,
+    pub first_pad: u32,
+    pub text: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct PadDefinition {
+    pub key: u32,
+    pub next: u32,
+    pub name_string_id: u32,
+    pub name: Option<String>,
+    pub x_raw: i32,
+    pub y_raw: i32,
+    pub padstack: u32,
+    pub flags: u32,
+    pub rotation_mdeg: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Default)]

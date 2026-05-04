@@ -29,7 +29,7 @@ def build_parser() -> argparse.ArgumentParser:
         ),
         epilog=(
             "Semantic-centered commands:\n"
-            "  main.py convert --from <aedb|auroradb|odbpp|brd|alg> --to <aaf|auroradb> <input> -o <out>\n"
+            "  main.py convert --from <aedb|auroradb|odbpp|brd|alg> --to <aaf|auroradb|odbpp> <input> -o <out>\n"
             "  main.py inspect source --format <aedb|auroradb|odbpp|brd|alg> <input>\n"
             "  main.py dump source-json --format <aedb|auroradb|odbpp|brd|alg> <input> -o <file>\n"
             "  main.py dump semantic-json --from <aedb|auroradb|odbpp|brd|alg> <input> -o <file>\n"

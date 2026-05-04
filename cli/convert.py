@@ -138,7 +138,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
 
     coverage_output = None
-    if args.coverage_output and args.source_format == "odbpp":
+    if (
+        args.coverage_output
+        and args.source_format == "odbpp"
+        and args.target_format in {"aaf", "auroradb"}
+    ):
         report = build_odbpp_coverage_report(
             result.payload,
             result.board,
@@ -174,12 +178,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     if semantic_output is not None:
         print(f"Semantic JSON written to: {semantic_output}")
-    if result.export.auroradb is not None:
+    if args.target_format == "odbpp":
+        print(f"ODB++ written to: {result.export.odbpp}")
+    elif result.export.auroradb is not None:
         print(f"AuroraDB written to: {result.export.auroradb}")
         print(f"Stackup files written to: {result.export.root}")
     else:
         print(f"AAF package written to: {result.export.root}")
-    if result.export.aaf is not None:
+    if getattr(result.export, "aaf", None) is not None:
         print(f"AAF files written to: {result.export.aaf}")
     if coverage_output is not None:
         print(f"Coverage report written to: {coverage_output}")

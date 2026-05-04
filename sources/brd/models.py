@@ -118,6 +118,30 @@ class BRDPadstack(SchemaModel):
     components_per_layer: int = Field(..., ge=0)
 
 
+class BRDComponent(SchemaModel):
+    key: int = Field(..., ge=0)
+    next: int = Field(..., ge=0)
+    device_type_string_id: int = Field(..., ge=0)
+    device_type: str | None = None
+    symbol_name_string_id: int = Field(..., ge=0)
+    symbol_name: str | None = None
+    first_instance: int = Field(..., ge=0)
+    function_slot: int = Field(..., ge=0)
+    pin_number: int = Field(..., ge=0)
+    fields: int = Field(..., ge=0)
+
+
+class BRDComponentInstance(SchemaModel):
+    key: int = Field(..., ge=0)
+    next: int = Field(..., ge=0)
+    footprint_instance: int = Field(..., ge=0)
+    refdes_string_id: int = Field(..., ge=0)
+    refdes: str | None = None
+    function_instance: int = Field(..., ge=0)
+    fields: int = Field(..., ge=0)
+    first_pad: int = Field(..., ge=0)
+
+
 class BRDFootprint(SchemaModel):
     key: int = Field(..., ge=0)
     next: int = Field(..., ge=0)
@@ -127,6 +151,31 @@ class BRDFootprint(SchemaModel):
     sym_lib_path_string_id: int = Field(..., ge=0)
     sym_lib_path: str | None = None
     coords_raw: list[int]
+
+
+class BRDFootprintInstance(SchemaModel):
+    key: int = Field(..., ge=0)
+    next: int = Field(..., ge=0)
+    layer: int = Field(..., ge=0)
+    rotation_mdeg: int = Field(..., ge=0)
+    x_raw: int
+    y_raw: int
+    component_instance: int = Field(..., ge=0)
+    graphic: int = Field(..., ge=0)
+    first_pad: int = Field(..., ge=0)
+    text: int = Field(..., ge=0)
+
+
+class BRDPadDefinition(SchemaModel):
+    key: int = Field(..., ge=0)
+    next: int = Field(..., ge=0)
+    name_string_id: int = Field(..., ge=0)
+    name: str | None = None
+    x_raw: int
+    y_raw: int
+    padstack: int = Field(..., ge=0)
+    flags: int = Field(..., ge=0)
+    rotation_mdeg: int = Field(..., ge=0)
 
 
 class BRDPlacedPad(SchemaModel):
@@ -218,7 +267,11 @@ class BRDLayout(SchemaModel):
     layers: list[BRDLayer] | None = None
     nets: list[BRDNet] | None = None
     padstacks: list[BRDPadstack] | None = None
+    components: list[BRDComponent] | None = None
+    component_instances: list[BRDComponentInstance] | None = None
     footprints: list[BRDFootprint] | None = None
+    footprint_instances: list[BRDFootprintInstance] | None = None
+    pad_definitions: list[BRDPadDefinition] | None = None
     placed_pads: list[BRDPlacedPad] | None = None
     vias: list[BRDVia] | None = None
     tracks: list[BRDTrack] | None = None

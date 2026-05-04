@@ -25,4 +25,5 @@ logs/
 .env
 .env.*
 *.log
+.DS_Store
 examples/

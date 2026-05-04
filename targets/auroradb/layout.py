@@ -81,6 +81,35 @@ from aurora_translator.semantic.models import (
 )
 
 
+_DEFAULT_SOURCE_UNIT = object()
+
+
+def _layout_unit(board: SemanticBoard) -> str:
+    return "mm" if _preserve_board_units(board) else "mil"
+
+
+def _geometry_source_unit(board: SemanticBoard) -> str | None:
+    return None if _preserve_board_units(board) else board.units
+
+
+def _preserve_board_units(board: SemanticBoard) -> bool:
+    source_format = (board.metadata.source_format or "").casefold()
+    unit = (board.units or "").casefold()
+    return source_format in {"alg", "brd"} and unit in {
+        "mm",
+        "millimeter",
+        "millimeters",
+        "millimetre",
+        "millimetres",
+    }
+
+
+def _resolved_source_unit(
+    board: SemanticBoard, source_unit: str | None | object
+) -> str | None:
+    return board.units if source_unit is _DEFAULT_SOURCE_UNIT else source_unit
+
+
 def _build_direct_layout_package(
     board: SemanticBoard,
     metal_layers: list[_ExportLayer],
@@ -88,14 +117,17 @@ def _build_direct_layout_package(
     part_export_plan: _PartExportPlan | None,
 ) -> _DirectLayoutBuilder:
     builder = _DirectLayoutBuilder()
+    geometry_source_unit = _geometry_source_unit(board)
     layer_name_map = _metal_layer_name_map(metal_layers, board.layers)
     shape_ids = _aaf_shape_ids(board.shapes)
-    trace_shape_ids = _aaf_trace_shape_ids(board, start_index=len(shape_ids) + 1)
+    trace_shape_ids = _aaf_trace_shape_ids(
+        board, start_index=len(shape_ids) + 1, source_unit=geometry_source_unit
+    )
     via_templates = _via_templates_for_export(board)
     via_template_ids = _aaf_via_template_ids(via_templates)
     pad_shape_ids = _pad_shape_ids_by_definition(board)
 
-    builder.outline = _direct_outline_node(board)
+    builder.outline = _direct_outline_node(board, source_unit=geometry_source_unit)
 
     for layer in metal_layers:
         builder.add_metal_layer(layer.name, "signal")
@@ -106,7 +138,9 @@ def _build_direct_layout_package(
         builder.add_component_layer(component_layer, metal_layer)
 
     for shape in board.shapes:
-        _direct_add_shape(builder, shape, shape_ids[shape.id], source_unit=board.units)
+        _direct_add_shape(
+            builder, shape, shape_ids[shape.id], source_unit=geometry_source_unit
+        )
     for trace_shape in trace_shape_ids.values():
         _direct_add_trace_shape(builder, trace_shape)
     for via_template in via_templates:
@@ -135,7 +169,7 @@ def _build_direct_layout_package(
             builder,
             component,
             layer_name_map,
-            source_unit=board.units,
+            source_unit=geometry_source_unit,
             placement=(
                 aedb_plan.placements_by_component_id.get(component.id)
                 if aedb_plan is not None
@@ -159,7 +193,7 @@ def _build_direct_layout_package(
                 shape_ids,
                 pad_shape_ids,
                 layer_name_map,
-                source_unit=board.units,
+                source_unit=geometry_source_unit,
                 source_format=board.metadata.source_format,
             ):
                 emitted_pad_ids.add(pad.id)
@@ -178,12 +212,17 @@ def _build_direct_layout_package(
             shape_ids,
             pad_shape_ids,
             layer_name_map,
-            source_unit=board.units,
+            source_unit=geometry_source_unit,
             source_format=board.metadata.source_format,
         )
 
     _direct_add_primitives(
-        builder, board, layer_name_map, net_names_by_id, trace_shape_ids
+        builder,
+        board,
+        layer_name_map,
+        net_names_by_id,
+        trace_shape_ids,
+        source_unit=geometry_source_unit,
     )
 
     emitted_net_vias: set[tuple[str, str, str, str, str]] = set()
@@ -194,8 +233,8 @@ def _build_direct_layout_package(
         via_template_id = via_template_ids.get(via.template_id)
         if net_name is None or via_template_id is None:
             continue
-        x = _length_to_mil(via.position.x, source_unit=board.units)
-        y = _length_to_mil(via.position.y, source_unit=board.units)
+        x = _length_to_mil(via.position.x, source_unit=geometry_source_unit)
+        y = _length_to_mil(via.position.y, source_unit=geometry_source_unit)
         if x is None or y is None:
             continue
         rotation = _format_rotation(
@@ -211,7 +250,7 @@ def _build_direct_layout_package(
         via_templates,
         via_template_ids,
         net_names_by_id,
-        source_unit=board.units,
+        source_unit=geometry_source_unit,
         source_format=board.metadata.source_format,
         emitted_keys=emitted_net_vias,
     ):
@@ -257,10 +296,20 @@ def _metal_layer_name_map(
     return layer_name_map
 
 
-def _direct_outline_node(board: SemanticBoard) -> AuroraBlock | AuroraItem:
-    payload = _board_outline_payload(board)
+def _direct_outline_node(
+    board: SemanticBoard, *, source_unit: str | None | object = _DEFAULT_SOURCE_UNIT
+) -> AuroraBlock | AuroraItem:
+    payload = _board_outline_payload(
+        board, source_unit=_resolved_source_unit(board, source_unit)
+    )
     if payload is None:
-        payload = _outline_command(board).split("-g <", 1)[1].split("> -profile", 1)[0]
+        payload = (
+            _outline_command(
+                board, source_unit=_resolved_source_unit(board, source_unit)
+            )
+            .split("-g <", 1)[1]
+            .split("> -profile", 1)[0]
+        )
     geometry = parse_geometry_option([payload])
     if geometry is None:
         outline = AuroraBlock("Outline")
@@ -461,6 +510,8 @@ def _direct_add_primitives(
     layer_name_map: dict[str, str],
     net_names_by_id: dict[str, str],
     trace_shape_ids: dict[str, _TraceShape],
+    *,
+    source_unit: str | None,
 ) -> None:
     geometry_index = 1
     for primitive in board.primitives:
@@ -479,7 +530,7 @@ def _direct_add_primitives(
                 layer_name,
                 trace_shape_ids,
                 start_index=geometry_index,
-                source_unit=board.units,
+                source_unit=source_unit,
             )
         elif kind == "arc":
             if _direct_add_arc_geometry(
@@ -489,7 +540,7 @@ def _direct_add_primitives(
                 layer_name,
                 trace_shape_ids,
                 geometry_id=f"A{geometry_index}",
-                source_unit=board.units,
+                source_unit=source_unit,
             ):
                 geometry_index += 1
         elif kind in {"polygon", "zone"}:
@@ -499,7 +550,7 @@ def _direct_add_primitives(
                 net_name,
                 layer_name,
                 source_format=board.metadata.source_format,
-                source_unit=board.units,
+                source_unit=source_unit,
             ):
                 geometry_index += 1
 
@@ -729,10 +780,16 @@ def _design_layout_lines(
     aedb_plan: _AedbExportPlan | None = None,
     part_export_plan: _PartExportPlan | None = None,
 ) -> list[str]:
-    lines = ["layout set -unit <mil>", _outline_command(board)]
+    geometry_source_unit = _geometry_source_unit(board)
+    lines = [
+        f"layout set -unit <{_layout_unit(board)}>",
+        _outline_command(board, source_unit=geometry_source_unit),
+    ]
     layer_name_map = _metal_layer_name_map(metal_layers, board.layers)
     shape_ids = _aaf_shape_ids(board.shapes)
-    trace_shape_ids = _aaf_trace_shape_ids(board, start_index=len(shape_ids) + 1)
+    trace_shape_ids = _aaf_trace_shape_ids(
+        board, start_index=len(shape_ids) + 1, source_unit=geometry_source_unit
+    )
     via_templates = _via_templates_for_export(board)
     via_template_ids = _aaf_via_template_ids(via_templates)
     pad_shape_ids = _pad_shape_ids_by_definition(board)
@@ -750,7 +807,9 @@ def _design_layout_lines(
         )
 
     for shape in board.shapes:
-        command = _shape_command(shape, shape_ids[shape.id], source_unit=board.units)
+        command = _shape_command(
+            shape, shape_ids[shape.id], source_unit=geometry_source_unit
+        )
         if command is not None:
             lines.append(command)
 
@@ -782,7 +841,7 @@ def _design_layout_lines(
         command = _component_command(
             component,
             layer_name_map,
-            source_unit=board.units,
+            source_unit=geometry_source_unit,
             placement=(
                 aedb_plan.placements_by_component_id.get(component.id)
                 if aedb_plan is not None
@@ -807,7 +866,7 @@ def _design_layout_lines(
                 shape_ids,
                 pad_shape_ids,
                 layer_name_map,
-                source_unit=board.units,
+                source_unit=geometry_source_unit,
                 source_format=board.metadata.source_format,
             )
             if command is not None:
@@ -832,14 +891,18 @@ def _design_layout_lines(
             shape_ids,
             pad_shape_ids,
             layer_name_map,
-            source_unit=board.units,
+            source_unit=geometry_source_unit,
             source_format=board.metadata.source_format,
         )
         if command is not None:
             lines.append(command)
 
     for command in _primitive_commands(
-        board, layer_name_map, net_names_by_id, trace_shape_ids
+        board,
+        layer_name_map,
+        net_names_by_id,
+        trace_shape_ids,
+        source_unit=geometry_source_unit,
     ):
         lines.append(command)
 
@@ -851,8 +914,8 @@ def _design_layout_lines(
         via_template_id = via_template_ids.get(via.template_id)
         if net_name is None or via_template_id is None:
             continue
-        x = _length_to_mil(via.position.x, source_unit=board.units)
-        y = _length_to_mil(via.position.y, source_unit=board.units)
+        x = _length_to_mil(via.position.x, source_unit=geometry_source_unit)
+        y = _length_to_mil(via.position.y, source_unit=geometry_source_unit)
         if x is None or y is None:
             continue
         rotation = _format_rotation(
@@ -872,7 +935,7 @@ def _design_layout_lines(
         via_templates,
         via_template_ids,
         net_names_by_id,
-        source_unit=board.units,
+        source_unit=geometry_source_unit,
         source_format=board.metadata.source_format,
         emitted_keys=emitted_net_vias,
     ):

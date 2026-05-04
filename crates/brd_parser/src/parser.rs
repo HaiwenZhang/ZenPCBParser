@@ -1,6 +1,7 @@
 use crate::model::{
-    BlockSummary, Footprint, Header, Keepout, Layer, LayerInfo, LayerMapEntry, LinkedList, Net,
-    NetAssignment, Padstack, PlacedPad, Segment, Shape, StringEntry, Summary, Text, Track, Via,
+    BlockSummary, Component, ComponentInstance, Footprint, FootprintInstance, Header, Keepout,
+    Layer, LayerInfo, LayerMapEntry, LinkedList, Net, NetAssignment, PadDefinition, Padstack,
+    PlacedPad, Segment, Shape, StringEntry, Summary, Text, Track, Via,
 };
 use std::collections::{BTreeMap, HashMap};
 use thiserror::Error;
@@ -93,7 +94,11 @@ pub struct ParsedBrd {
     pub layers: Option<Vec<Layer>>,
     pub nets: Option<Vec<Net>>,
     pub padstacks: Option<Vec<Padstack>>,
+    pub components: Option<Vec<Component>>,
+    pub component_instances: Option<Vec<ComponentInstance>>,
     pub footprints: Option<Vec<Footprint>>,
+    pub footprint_instances: Option<Vec<FootprintInstance>>,
+    pub pad_definitions: Option<Vec<PadDefinition>>,
     pub placed_pads: Option<Vec<PlacedPad>>,
     pub vias: Option<Vec<Via>>,
     pub tracks: Option<Vec<Track>>,
@@ -118,7 +123,11 @@ struct BlockParse {
     next: Option<u32>,
     net: Option<Net>,
     padstack: Option<Padstack>,
+    component: Option<Component>,
+    component_instance: Option<ComponentInstance>,
     footprint: Option<Footprint>,
+    footprint_instance: Option<FootprintInstance>,
+    pad_definition: Option<PadDefinition>,
     placed_pad: Option<PlacedPad>,
     via: Option<Via>,
     track: Option<Track>,
@@ -145,7 +154,11 @@ pub fn parse_brd_bytes(bytes: &[u8], options: &ParseOptions) -> Result<ParsedBrd
     let mut blocks = Vec::new();
     let mut nets = Vec::new();
     let mut padstacks = Vec::new();
+    let mut components = Vec::new();
+    let mut component_instances = Vec::new();
     let mut footprints = Vec::new();
+    let mut footprint_instances = Vec::new();
+    let mut pad_definitions = Vec::new();
     let mut placed_pads = Vec::new();
     let mut vias = Vec::new();
     let mut tracks = Vec::new();
@@ -197,10 +210,28 @@ pub fn parse_brd_bytes(bytes: &[u8], options: &ParseOptions) -> Result<ParsedBrd
             padstack.name = string_map.get(&padstack.name_string_id).cloned();
             padstacks.push(padstack);
         }
+        if let Some(mut component) = parsed.component {
+            component.device_type = string_map.get(&component.device_type_string_id).cloned();
+            component.symbol_name = string_map.get(&component.symbol_name_string_id).cloned();
+            components.push(component);
+        }
+        if let Some(mut component_instance) = parsed.component_instance {
+            component_instance.refdes = string_map
+                .get(&component_instance.refdes_string_id)
+                .cloned();
+            component_instances.push(component_instance);
+        }
         if let Some(mut footprint) = parsed.footprint {
             footprint.name = string_map.get(&footprint.name_string_id).cloned();
             footprint.sym_lib_path = string_map.get(&footprint.sym_lib_path_string_id).cloned();
             footprints.push(footprint);
+        }
+        if let Some(footprint_instance) = parsed.footprint_instance {
+            footprint_instances.push(footprint_instance);
+        }
+        if let Some(mut pad_definition) = parsed.pad_definition {
+            pad_definition.name = string_map.get(&pad_definition.name_string_id).cloned();
+            pad_definitions.push(pad_definition);
         }
         if let Some(placed_pad) = parsed.placed_pad {
             placed_pads.push(placed_pad);
@@ -271,7 +302,11 @@ pub fn parse_brd_bytes(bytes: &[u8], options: &ParseOptions) -> Result<ParsedBrd
         layers: options.include_details.then_some(layers),
         nets: options.include_details.then_some(nets),
         padstacks: options.include_details.then_some(padstacks),
+        components: options.include_details.then_some(components),
+        component_instances: options.include_details.then_some(component_instances),
         footprints: options.include_details.then_some(footprints),
+        footprint_instances: options.include_details.then_some(footprint_instances),
+        pad_definitions: options.include_details.then_some(pad_definitions),
         placed_pads: options.include_details.then_some(placed_pads),
         vias: options.include_details.then_some(vias),
         tracks: options.include_details.then_some(tracks),
@@ -722,11 +757,32 @@ fn parse_component(
     reader.skip(3)?;
     let key = reader.u32()?;
     let next = reader.u32()?;
-    reader.skip_u32(6)?;
+    let device_type_string_id = reader.u32()?;
+    let symbol_name_string_id = reader.u32()?;
+    let first_instance = reader.u32()?;
+    let function_slot = reader.u32()?;
+    let pin_number = reader.u32()?;
+    let fields = reader.u32()?;
     if version.ge(FormatVersion::V172) {
         reader.skip_u32(1)?;
     }
-    Ok(with_key_next(key, next))
+    Ok(BlockParse {
+        key: Some(key),
+        next: Some(next),
+        component: Some(Component {
+            key,
+            next,
+            device_type_string_id,
+            device_type: None,
+            symbol_name_string_id,
+            symbol_name: None,
+            first_instance,
+            function_slot,
+            pin_number,
+            fields,
+        }),
+        ..BlockParse::default()
+    })
 }
 
 fn parse_component_inst(
@@ -739,12 +795,30 @@ fn parse_component_inst(
     if version.ge(FormatVersion::V172) {
         reader.skip_u32(3)?;
     }
-    reader.skip_u32(1)?;
+    let footprint_instance = reader.u32()?;
     if version.lt(FormatVersion::V172) {
         reader.skip_u32(1)?;
     }
-    reader.skip_u32(5)?;
-    Ok(with_key_next(key, next))
+    let refdes_string_id = reader.u32()?;
+    let function_instance = reader.u32()?;
+    let fields = reader.u32()?;
+    reader.skip_u32(1)?;
+    let first_pad = reader.u32()?;
+    Ok(BlockParse {
+        key: Some(key),
+        next: Some(next),
+        component_instance: Some(ComponentInstance {
+            key,
+            next,
+            footprint_instance,
+            refdes_string_id,
+            refdes: None,
+            function_instance,
+            fields,
+            first_pad,
+        }),
+        ..BlockParse::default()
+    })
 }
 
 fn parse_pin_number(
@@ -836,18 +910,36 @@ fn parse_pin_def(
 fn parse_pad(reader: &mut Reader<'_>, version: FormatVersion) -> Result<BlockParse, BrdParseError> {
     reader.skip(3)?;
     let key = reader.u32()?;
-    reader.skip_u32(1)?;
+    let name_string_id = reader.u32()?;
     let next = reader.u32()?;
     if version.ge(FormatVersion::V174) {
         reader.skip_u32(1)?;
     }
-    reader.skip(8)?;
-    reader.skip_u32(2)?;
+    let x_raw = reader.i32()?;
+    let y_raw = reader.i32()?;
+    let padstack = reader.u32()?;
+    reader.skip_u32(1)?;
     if version.ge(FormatVersion::V172) {
         reader.skip_u32(1)?;
     }
-    reader.skip_u32(2)?;
-    Ok(with_key_next(key, next))
+    let flags = reader.u32()?;
+    let rotation_mdeg = reader.u32()?;
+    Ok(BlockParse {
+        key: Some(key),
+        next: Some(next),
+        pad_definition: Some(PadDefinition {
+            key,
+            next,
+            name_string_id,
+            name: None,
+            x_raw,
+            y_raw,
+            padstack,
+            flags,
+            rotation_mdeg,
+        }),
+        ..BlockParse::default()
+    })
 }
 
 fn parse_rect_0e(
@@ -1417,27 +1509,53 @@ fn parse_footprint_inst(
     reader: &mut Reader<'_>,
     version: FormatVersion,
 ) -> Result<BlockParse, BrdParseError> {
-    reader.skip(3)?;
+    reader.skip(1)?;
+    let layer = reader.u8()?;
+    reader.skip(1)?;
     let key = reader.u32()?;
     let next = reader.u32()?;
     if version.ge(FormatVersion::V172) {
         reader.skip_u32(1)?;
     }
-    if version.lt(FormatVersion::V172) {
-        reader.skip_u32(1)?;
-    }
+    let legacy_component_instance = if version.lt(FormatVersion::V172) {
+        Some(reader.u32()?)
+    } else {
+        None
+    };
     reader.skip(4)?;
     if version.ge(FormatVersion::V172) {
         reader.skip_u32(1)?;
     }
     reader.skip_u32(1)?;
-    reader.skip_u32(1)?;
-    reader.skip(8)?;
-    if version.ge(FormatVersion::V172) {
-        reader.skip_u32(1)?;
-    }
-    reader.skip_u32(7)?;
-    Ok(with_key_next(key, next))
+    let rotation_mdeg = reader.u32()?;
+    let x_raw = reader.i32()?;
+    let y_raw = reader.i32()?;
+    let component_instance = if version.ge(FormatVersion::V172) {
+        reader.u32()?
+    } else {
+        legacy_component_instance.unwrap_or(0)
+    };
+    let graphic = reader.u32()?;
+    let first_pad = reader.u32()?;
+    let text = reader.u32()?;
+    reader.skip_u32(4)?;
+    Ok(BlockParse {
+        key: Some(key),
+        next: Some(next),
+        footprint_instance: Some(FootprintInstance {
+            key,
+            next,
+            layer,
+            rotation_mdeg,
+            x_raw,
+            y_raw,
+            component_instance,
+            graphic,
+            first_pad,
+            text,
+        }),
+        ..BlockParse::default()
+    })
 }
 
 fn parse_connection(
