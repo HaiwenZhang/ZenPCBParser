@@ -10,6 +10,7 @@ from aurora_translator.semantic.schema import semantic_json_schema
 from aurora_translator.shared.logging import log_run_complete
 from aurora_translator.sources.aedb.models import AEDBLayout
 from aurora_translator.sources.alg.schema import alg_json_schema
+from aurora_translator.sources.altium.schema import altium_json_schema
 from aurora_translator.sources.auroradb.schema import auroradb_json_schema
 from aurora_translator.sources.brd.schema import brd_json_schema
 from aurora_translator.sources.odbpp.schema import odbpp_json_schema
@@ -26,7 +27,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--format",
-        choices=["aedb", "auroradb", "odbpp", "brd", "alg", "semantic"],
+        choices=["aedb", "auroradb", "odbpp", "brd", "alg", "altium", "semantic"],
         required=True,
     )
     parser.add_argument(
@@ -58,6 +59,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         schema = brd_json_schema()
     elif args.format == "alg":
         schema = alg_json_schema()
+    elif args.format == "altium":
+        schema = altium_json_schema()
     else:
         schema = semantic_json_schema()
 

@@ -8,6 +8,17 @@
 
 [English](#en) | [返回顶部](#top)
 
+## 0.7.10
+
+- BRD -> SemanticBoard 现在区分 footprint-local `PartPad` 旋转、layout 绝对 pad 旋转和 component-pad `NetVias` instance 旋转，避免部分长方形和多边形 component pad 额外叠加 component rotation。
+- Semantic JSON schema 保持 `0.7.2`；该版本不新增 semantic 字段。
+
+## 0.7.9
+
+- 新增 Altium -> SemanticBoard adapter，会把 Altium `.PcbDoc` source JSON 中的铜层、net、component/footprint、pad/pin、via template、via、trace、arc、fill、region、polygon 和 board outline 映射到统一语义对象。
+- 使用 `examples/altium_cases/VR.PcbDoc` 验证：Semantic summary 为 `layers=32`、`nets=405`、`components=494`、`footprints=48`、`pins=2176`、`pads=7124`、`vias=1123`、`primitives=28284`、`diagnostics=0`。
+- Semantic JSON schema 更新到 `0.7.2`；字段结构不变，但 `source_format` 枚举新增 `altium`。
+
 ## 0.7.5
 
 - ALG -> SemanticBoard 现在会按 `GRAPHIC_DATA_10` 区分 `CONNECT`、`SHAPE` 和 `VOID`：`CONNECT` 仍导出 trace / arc，`SHAPE` 会按 `RECORD_TAG` group 聚合为 polygon，`VOID` 会作为 polygon void 导出到 `geometry.voids`。
@@ -418,6 +429,17 @@
 ## English
 
 [中文](#zh) | [Back to top](#top)
+
+## 0.7.10
+
+- BRD -> SemanticBoard now separates footprint-local `PartPad` rotation, layout absolute pad rotation, and component-pad `NetVias` instance rotation so selected rectangular and polygon component pads no longer receive component rotation twice.
+- Semantic JSON schema remains `0.7.2`; this version adds no semantic fields.
+
+## 0.7.9
+
+- Added the Altium -> SemanticBoard adapter, mapping copper layers, nets, components/footprints, pads/pins, via templates, vias, traces, arcs, fills, regions, polygons, and board outline from Altium `.PcbDoc` source JSON into unified semantic objects.
+- Verified `examples/altium_cases/VR.PcbDoc`: Semantic summary is `layers=32`, `nets=405`, `components=494`, `footprints=48`, `pins=2176`, `pads=7124`, `vias=1123`, `primitives=28284`, and `diagnostics=0`.
+- Semantic JSON schema is updated to `0.7.2`; field structure is unchanged, but the `source_format` enum now includes `altium`.
 
 ## 0.7.5
 

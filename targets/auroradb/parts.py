@@ -1757,6 +1757,15 @@ def _format_footprint_pad_rotation(
     normalize_rotation: float | None = None,
     source_format: str | None = None,
 ) -> str:
+    footprint_rotation = pad.geometry.get("footprint_rotation")
+    if footprint_rotation is not None:
+        rotation = math.degrees(_number(footprint_rotation) or 0.0)
+        if abs(rotation) < 1e-9:
+            return "0"
+        if _source_rotations_are_clockwise(source_format):
+            return _format_number(_normalize_degree(rotation))
+        return _format_number(_normalize_degree(360.0 - rotation))
+
     pad_rotation = _number(_pad_rotation(pad)) or 0.0
     component_rotation = (
         normalize_rotation

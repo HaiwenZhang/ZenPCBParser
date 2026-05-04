@@ -865,19 +865,19 @@
       "additionalProperties": false,
       "properties": {
         "project_version": {
-          "default": "1.0.43",
+          "default": "1.0.44",
           "description": "Aurora Translator project version.",
           "title": "Project Version",
           "type": "string"
         },
         "parser_version": {
-          "default": "0.7.5",
+          "default": "0.7.10",
           "description": "Semantic parser version that produced this payload.",
           "title": "Parser Version",
           "type": "string"
         },
         "output_schema_version": {
-          "default": "0.7.1",
+          "default": "0.7.2",
           "description": "Semantic JSON schema version.",
           "title": "Output Schema Version",
           "type": "string"
@@ -889,7 +889,8 @@
             "auroradb",
             "odbpp",
             "brd",
-            "alg"
+            "alg",
+            "altium"
           ],
           "title": "Source Format",
           "type": "string"
@@ -2525,7 +2526,8 @@
             "auroradb",
             "odbpp",
             "brd",
-            "alg"
+            "alg",
+            "altium"
           ],
           "title": "Source Format",
           "type": "string"
@@ -2564,7 +2566,7 @@
       "type": "object"
     }
   },
-  "$id": "https://aurora-translator.local/schemas/semantic-0.7.1.json",
+  "$id": "https://aurora-translator.local/schemas/semantic-0.7.2.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "Format-neutral semantic view derived from a format-specific payload.",

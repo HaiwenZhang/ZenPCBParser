@@ -22,12 +22,14 @@ Current source formats:
 - `sources/odbpp/`
 - `sources/brd/`
 - `sources/alg/`
+- `sources/altium/`
 
 Current Rust parser cores:
 
 - `crates/odbpp_parser/`
 - `crates/brd_parser/`
 - `crates/alg_parser/`
+- `crates/altium_parser/`
 
 Current Rust target exporters:
 
@@ -59,4 +61,5 @@ the owning package or project doc and link to it.
 - Rust BRD checks: `cargo test --manifest-path crates/brd_parser/Cargo.toml`
 - Rust ODB++ checks: `cargo test --manifest-path crates/odbpp_parser/Cargo.toml`
 - Rust ODB++ exporter checks: `cargo test --manifest-path crates/odbpp_exporter/Cargo.toml`
+- Rust Altium checks: `cargo test --manifest-path crates/altium_parser/Cargo.toml`
 - Project formatting: `uv run ruff format --check .`

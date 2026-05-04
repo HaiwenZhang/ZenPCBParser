@@ -8,7 +8,7 @@ from aurora_translator.pipeline.types import SourceLoadOptions
 from aurora_translator.shared.logging import configure_logging, log_run_start
 
 
-SOURCE_FORMAT_CHOICES = ["aedb", "auroradb", "odbpp", "brd", "alg"]
+SOURCE_FORMAT_CHOICES = ["aedb", "auroradb", "odbpp", "brd", "alg", "altium"]
 TARGET_FORMAT_CHOICES = ["aaf", "auroradb", "odbpp"]
 
 

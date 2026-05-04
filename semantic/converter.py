@@ -5,23 +5,30 @@ from typing import Literal
 
 from aurora_translator.sources.aedb.models import AEDBLayout
 from aurora_translator.sources.alg.models import ALGLayout
+from aurora_translator.sources.altium.models import AltiumLayout
 from aurora_translator.sources.auroradb.models import AuroraDBModel
 from aurora_translator.sources.brd.models import BRDLayout
 from aurora_translator.sources.odbpp.models import ODBLayout
 from aurora_translator.semantic.adapters import (
     from_aedb,
     from_alg,
+    from_altium,
     from_auroradb,
     from_brd,
     from_odbpp,
 )
 from aurora_translator.semantic.models import SemanticBoard
 
-SourceFormat = Literal["aedb", "auroradb", "odbpp", "brd", "alg"]
+SourceFormat = Literal["aedb", "auroradb", "odbpp", "brd", "alg", "altium"]
 
 
 def to_semantic_board(
-    payload: AEDBLayout | AuroraDBModel | ODBLayout | BRDLayout | ALGLayout,
+    payload: AEDBLayout
+    | AuroraDBModel
+    | ODBLayout
+    | BRDLayout
+    | ALGLayout
+    | AltiumLayout,
     *,
     build_connectivity: bool = True,
 ) -> SemanticBoard:
@@ -37,6 +44,8 @@ def to_semantic_board(
         return from_brd(payload)
     if isinstance(payload, ALGLayout):
         return from_alg(payload, build_connectivity=build_connectivity)
+    if isinstance(payload, AltiumLayout):
+        return from_altium(payload, build_connectivity=build_connectivity)
     raise TypeError(f"Unsupported semantic source payload: {type(payload)!r}")
 
 
@@ -59,6 +68,11 @@ def from_json_file(
     if source_format == "alg":
         return from_alg(
             ALGLayout.model_validate_json(text),
+            build_connectivity=build_connectivity,
+        )
+    if source_format == "altium":
+        return from_altium(
+            AltiumLayout.model_validate_json(text),
             build_connectivity=build_connectivity,
         )
     raise ValueError(f"Unsupported semantic source format: {source_format!r}")

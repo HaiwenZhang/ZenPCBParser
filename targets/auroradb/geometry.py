@@ -1050,7 +1050,7 @@ def _component_pad_net_vias(
         y = _length_to_mil(via_position.y, source_unit=source_unit)
         if x is None or y is None:
             continue
-        rotation = _format_rotation(_pad_rotation(pad), source_format=source_format)
+        rotation = _format_rotation(_pad_via_rotation(pad), source_format=source_format)
         key = _net_via_key(net_name, via_template_id, x, y, rotation)
         if key in emitted_keys:
             continue
@@ -1343,6 +1343,10 @@ def _pin_name(pin: SemanticPin) -> str:
 
 def _pad_rotation(pad: SemanticPad) -> Any:
     return pad.geometry.get("rotation")
+
+
+def _pad_via_rotation(pad: SemanticPad) -> Any:
+    return pad.geometry.get("via_rotation", _pad_rotation(pad))
 
 
 def _via_template_layer_rotation(

@@ -205,7 +205,7 @@ flowchart LR
     rust --> cli --> py
 ```
 
-当前 BRD parser 覆盖 header、string table、linked-list metadata、layer list、net、padstack、footprint、placed pad、via、track、segment、shape、keepout、text 和 block summary。`semantic.adapters.brd` 会把物理 ETCH layer、net、placed pad bbox、component / pin / footprint、padstack via template、via、track/shape segment 链和 keepout void 映射进 `SemanticBoard`，从而支撑 AuroraDB 的走线、铜皮 polygon 和 `PolygonHole` 输出。
+当前 BRD parser 覆盖 header、string table、linked-list metadata、layer list、net、padstack component 几何表、footprint、placed pad、via、track、segment、shape、keepout、text 和 block summary。`semantic.adapters.brd` 会把物理 ETCH layer、net、padstack pad/barrel 形状、placed pad bbox、component / pin / footprint、padstack via template、via、track/shape segment 链和 keepout void 映射进 `SemanticBoard`，从而支撑 AuroraDB 的走线、铜皮 polygon、偏心 slot via 和 `PolygonHole` 输出。
 
 ## ALG 解析链路
 
@@ -226,13 +226,32 @@ flowchart LR
 
 当前 ALG parser 覆盖 board、layer、component、component pin、logical pin、composite pad、full geometry pad/via/track/outline、net 和 symbol section，并保留 track 的 `GRAPHIC_DATA_10` 几何角色。`semantic.adapters.alg` 会把 conductor layer、net、component/package、pin、component pad、via template、via、CONNECT trace/arc、SHAPE polygon、VOID polygon hole 和 board extents 映射进 `SemanticBoard`，从而支撑直接 AuroraDB 输出。对于存在逻辑 pin 但缺少铜皮 pad 几何的 extracta 记录，adapter 会保留 pin 并生成默认 pad，同时写入 info 级 diagnostic。
 
+## Altium 解析链路
+
+Altium Designer `.PcbDoc` 解析采用 Rust + Python 双层结构。输入是二进制 Microsoft Compound File 容器中的 Altium PCB stream，输出模型为本项目自有的 `AltiumLayout` source JSON。
+
+```mermaid
+flowchart LR
+    source["Altium Designer .PcbDoc"]
+    rust["crates/altium_parser<br/>Rust core"]
+    native["PyO3 native module"]
+    cli["Rust CLI"]
+    py["sources/altium/parser.py<br/>parse_altium()"]
+    model["sources/altium/models.py<br/>AltiumLayout"]
+    source --> rust
+    rust --> native --> py --> model
+    rust --> cli --> py
+```
+
+当前 Altium parser 覆盖 `.PcbDoc` CFB 容器、`FileHeader`、`Board6`、`Nets6`、`Classes6`、`Rules6`、`Components6`、`Pads6`、`Vias6`、`Tracks6`、`Arcs6`、`Fills6`、`Regions6`、`ShapeBasedRegions6`、`Polygons6`、`Texts6` 和 `WideStrings6`。`semantic.adapters.altium` 会把铜层、net、component/footprint、pad/pin、via template、via、trace、arc、fill、region、polygon 和 board outline 映射进 `SemanticBoard`。当前输入范围是二进制 `.PcbDoc`；`.PrjPcb`、`.SchDoc`、`.PcbLib` 和 Altium ASCII PCB 文件不是本解析器入口。
+
 ## Semantic 语义链路
 
 Semantic 层既可以消费已经导出的格式 JSON，也可以直接消费内存中的格式对象，并生成统一语义对象：
 
 ```mermaid
 flowchart LR
-    source["AEDB / AuroraDB / ODB++ / BRD / ALG JSON"]
+    source["AEDB / AuroraDB / ODB++ / BRD / ALG / Altium JSON"]
     adapter["semantic.adapters"]
     model["semantic/models.py<br/>SemanticBoard"]
     pass["semantic/passes.py<br/>connectivity + diagnostics"]
@@ -254,6 +273,7 @@ flowchart LR
 | ODB++ | `sources/odbpp/docs/odbpp_schema.json` | `sources/odbpp/docs/odbpp_json_schema.md` | `sources/odbpp/docs/CHANGELOG.md`、`sources/odbpp/docs/SCHEMA_CHANGELOG.md` |
 | BRD | 通过 `main.py schema --format brd` 生成 | 暂无长期字段说明 | 项目级 `docs/CHANGELOG.md` |
 | ALG | 通过 `main.py schema --format alg` 生成 | 暂无长期字段说明 | 项目级 `docs/CHANGELOG.md` |
+| Altium | 通过 `main.py schema --format altium` 生成 | 暂无长期字段说明 | 项目级 `docs/CHANGELOG.md` |
 | Semantic | `semantic/docs/semantic_schema.json` | `semantic/docs/semantic_json_schema.md` | `semantic/docs/CHANGELOG.md`、`semantic/docs/SCHEMA_CHANGELOG.md` |
 
 常用 schema 生成命令：
@@ -263,6 +283,7 @@ uv run python .\main.py --schema-output .\sources\aedb\docs\aedb_schema.json
 uv run python .\main.py auroradb schema -o .\sources\auroradb\docs\auroradb_schema.json
 uv run python .\main.py odbpp schema -o .\sources\odbpp\docs\odbpp_schema.json
 uv run python .\main.py schema --format alg -o .\out\alg_schema.json
+uv run python .\main.py schema --format altium -o .\out\altium_schema.json
 uv run python .\main.py semantic schema -o .\semantic\docs\semantic_schema.json
 ```
 
@@ -273,8 +294,8 @@ uv run python .\main.py semantic schema -o .\semantic\docs\semantic_schema.json
 | 层级 | 常量 | 作用 |
 | --- | --- | --- |
 | 项目版本 | `version.PROJECT_VERSION` | 表示整个 Aurora Translator 的发布版本。 |
-| 格式解析器版本 | `AEDB_PARSER_VERSION` / `AURORADB_PARSER_VERSION` / `ODBPP_PARSER_VERSION` / `BRD_PARSER_VERSION` / `ALG_PARSER_VERSION` | 表示某个格式解析逻辑、性能或集成方式的版本。 |
-| 格式 JSON schema 版本 | `AEDB_JSON_SCHEMA_VERSION` / `AURORADB_JSON_SCHEMA_VERSION` / `ODBPP_JSON_SCHEMA_VERSION` / `BRD_JSON_SCHEMA_VERSION` / `ALG_JSON_SCHEMA_VERSION` | 表示某个格式 JSON 输出契约的版本。 |
+| 格式解析器版本 | `AEDB_PARSER_VERSION` / `AURORADB_PARSER_VERSION` / `ODBPP_PARSER_VERSION` / `BRD_PARSER_VERSION` / `ALG_PARSER_VERSION` / `ALTIUM_PARSER_VERSION` | 表示某个格式解析逻辑、性能或集成方式的版本。 |
+| 格式 JSON schema 版本 | `AEDB_JSON_SCHEMA_VERSION` / `AURORADB_JSON_SCHEMA_VERSION` / `ODBPP_JSON_SCHEMA_VERSION` / `BRD_JSON_SCHEMA_VERSION` / `ALG_JSON_SCHEMA_VERSION` / `ALTIUM_JSON_SCHEMA_VERSION` | 表示某个格式 JSON 输出契约的版本。 |
 | Semantic 版本 | `SEMANTIC_PARSER_VERSION` / `SEMANTIC_JSON_SCHEMA_VERSION` | 表示语义转换逻辑和 semantic JSON 输出契约的版本。 |
 
 JSON payload 中统一输出：
@@ -306,12 +327,14 @@ JSON payload 中统一输出：
 | AuroraDB JSON schema | `0.2.0` |
 | ODB++ parser | `0.6.3` |
 | ODB++ JSON schema | `0.6.0` |
-| BRD parser | `0.1.5` |
-| BRD JSON schema | `0.4.0` |
+| BRD parser | `0.1.6` |
+| BRD JSON schema | `0.5.0` |
 | ALG parser | `0.1.1` |
 | ALG JSON schema | `0.2.0` |
-| Semantic parser | `0.7.7` |
-| Semantic JSON schema | `0.7.1` |
+| Altium parser | `0.1.0` |
+| Altium JSON schema | `0.1.0` |
+| Semantic parser | `0.7.10` |
+| Semantic JSON schema | `0.7.2` |
 
 ## 开发和构建
 
@@ -435,6 +458,7 @@ flowchart TD
 | `sources/odbpp/` | ODB++ Python integration layer, native-first Rust parser invocation with CLI fallback, `ODBLayout` validation, schema export, and coverage helpers. |
 | `sources/brd/` | Cadence Allegro BRD Python integration layer, native-first Rust parser invocation with CLI fallback, `BRDLayout` validation, and schema export. |
 | `sources/alg/` | Cadence Allegro extracta ALG Python integration layer, native-first Rust parser invocation with CLI fallback, `ALGLayout` validation, and schema export. |
+| `sources/altium/` | Altium Designer `.PcbDoc` Python integration layer, native-first Rust parser invocation with CLI fallback, `AltiumLayout` validation, and schema export. |
 | `semantic/` | The unified `SemanticBoard`, format adapters, connectivity, and semantic diagnostics. |
 | `targets/auroradb/` | The `SemanticBoard -> AuroraDB` export path, with AAF kept only as an internal or explicitly exported intermediate; `exporter.py` is now top-level orchestration only, `plan.py` owns export indexes, `direct.py` owns direct AuroraDB builder state, `layout.py` owns `layout.db` / `design.layout` emission, `parts.py` owns `parts.db` / `design.part` emission and part/footprint planning, `geometry.py` owns shape / via / trace / polygon geometry commands and payloads, `stackup.py` owns stackup planning/serialization, `formatting.py` owns unit / number / rotation formatting helpers, and `names.py` owns naming plus AAF quoting helpers. |
 | `targets/odbpp/` | The `SemanticBoard -> ODB++` Python target wrapper, which serializes Semantic JSON for the Rust `odbpp_exporter` CLI and wires it into `convert --to odbpp`. |
@@ -443,6 +467,7 @@ flowchart TD
 | `crates/odbpp_parser/` | Rust ODB++ parser core, CLI, and PyO3 native module for directory/archive reading and ODB++ text record parsing; summary-only, explicit-step, and default auto-step detail paths skip unnecessary detail files. |
 | `crates/brd_parser/` | Rust Allegro BRD binary parser core, CLI, and PyO3 native module for headers, string tables, block summaries, and modeled board objects. |
 | `crates/alg_parser/` | Rust Allegro extracta ALG text parser core, CLI, and PyO3 native module for streaming section headers, boards, layers, components, pins, padstacks, pads, vias, tracks, symbols, and outline records. |
+| `crates/altium_parser/` | Rust Altium Designer `.PcbDoc` parser core, CLI, and PyO3 native module for CFB traversal and modeled PCB streams. |
 | `crates/odbpp_exporter/` | Rust ODB++ target exporter that reads `SemanticBoard` JSON and writes a deterministic ODB++ directory; `writer.rs` is the module entry point, with `writer/entity.rs`, `writer/features.rs`, `writer/attributes.rs`, `writer/components.rs`, `writer/package.rs`, `writer/eda_data.rs`, `writer/netlist.rs`, `writer/formatting.rs`, and `writer/model.rs` owning entity orchestration, feature records, attribute tables/layer attrlists, component records, EDA package records, EDA data, cadnet netlists, ODB++ naming/formatting, and the Semantic input model. |
 | `cli/` | The new `convert / inspect / dump / schema` entrypoints plus compatibility commands. |
 | `docs/` | Project-level documentation and project-level changelogs. Format-level documents live under each `*/docs/` directory. |
@@ -572,7 +597,7 @@ flowchart LR
     rust --> cli --> py
 ```
 
-The current BRD parser covers headers, string tables, linked-list metadata, layer lists, nets, padstacks, footprints, placed pads, vias, tracks, segments, shapes, keepouts, texts, and block summaries. `semantic.adapters.brd` maps physical ETCH layers, nets, placed-pad bounding boxes, components / pins / footprints, padstack via templates, vias, track/shape segment chains, and keepout voids into `SemanticBoard`, supporting AuroraDB output for routing, copper polygons, and `PolygonHole` geometry.
+The current BRD parser covers headers, string tables, linked-list metadata, layer lists, nets, padstack component geometry tables, footprints, placed pads, vias, tracks, segments, shapes, keepouts, texts, and block summaries. `semantic.adapters.brd` maps physical ETCH layers, nets, padstack pad/barrel shapes, placed-pad bounding boxes, components / pins / footprints, padstack via templates, vias, track/shape segment chains, and keepout voids into `SemanticBoard`, supporting AuroraDB output for routing, copper polygons, eccentric slot vias, and `PolygonHole` geometry.
 
 ## ALG Parsing Flow
 
@@ -593,13 +618,32 @@ flowchart LR
 
 The current ALG parser covers board, layer, component, component-pin, logical-pin, composite-pad, full-geometry pad/via/track/outline, net, and symbol sections, and preserves each track record's `GRAPHIC_DATA_10` geometry role. `semantic.adapters.alg` maps conductor layers, nets, components/packages, pins, component pads, via templates, vias, CONNECT traces/arcs, SHAPE polygons, VOID polygon holes, and board extents into `SemanticBoard`, supporting direct AuroraDB output. For extracta records that have logical pins but no copper pad geometry, the adapter keeps the pin, creates a default pad, and emits an info-level diagnostic.
 
+## Altium Parsing Flow
+
+Altium Designer `.PcbDoc` parsing uses a Rust + Python two-layer structure. Input is an Altium PCB stream set inside a binary Microsoft Compound File container, and the output model is the project-owned `AltiumLayout` source JSON.
+
+```mermaid
+flowchart LR
+    source["Altium Designer .PcbDoc"]
+    rust["crates/altium_parser<br/>Rust core"]
+    native["PyO3 native module"]
+    cli["Rust CLI"]
+    py["sources/altium/parser.py<br/>parse_altium()"]
+    model["sources/altium/models.py<br/>AltiumLayout"]
+    source --> rust
+    rust --> native --> py --> model
+    rust --> cli --> py
+```
+
+The current Altium parser covers the `.PcbDoc` CFB container, `FileHeader`, `Board6`, `Nets6`, `Classes6`, `Rules6`, `Components6`, `Pads6`, `Vias6`, `Tracks6`, `Arcs6`, `Fills6`, `Regions6`, `ShapeBasedRegions6`, `Polygons6`, `Texts6`, and `WideStrings6`. `semantic.adapters.altium` maps copper layers, nets, components/footprints, pads/pins, via templates, vias, traces, arcs, fills, regions, polygons, and board outline into `SemanticBoard`. The current input scope is binary `.PcbDoc`; `.PrjPcb`, `.SchDoc`, `.PcbLib`, and Altium ASCII PCB files are not parser entrypoints.
+
 ## Semantic Flow
 
 The Semantic layer can consume either exported format JSON or in-memory format objects and generate unified semantic objects:
 
 ```mermaid
 flowchart LR
-    source["AEDB / AuroraDB / ODB++ / BRD / ALG JSON"]
+    source["AEDB / AuroraDB / ODB++ / BRD / ALG / Altium JSON"]
     adapter["semantic.adapters"]
     model["semantic/models.py<br/>SemanticBoard"]
     pass["semantic/passes.py<br/>connectivity + diagnostics"]
@@ -621,6 +665,7 @@ See [semantic/docs/architecture.md](../semantic/docs/architecture.md) for the de
 | ODB++ | `sources/odbpp/docs/odbpp_schema.json` | `sources/odbpp/docs/odbpp_json_schema.md` | `sources/odbpp/docs/CHANGELOG.md`, `sources/odbpp/docs/SCHEMA_CHANGELOG.md` |
 | BRD | Generated by `main.py schema --format brd` | No long-lived field guide yet | Project-level `docs/CHANGELOG.md` |
 | ALG | Generated by `main.py schema --format alg` | No long-lived field guide yet | Project-level `docs/CHANGELOG.md` |
+| Altium | Generated by `main.py schema --format altium` | No long-lived field guide yet | Project-level `docs/CHANGELOG.md` |
 | Semantic | `semantic/docs/semantic_schema.json` | `semantic/docs/semantic_json_schema.md` | `semantic/docs/CHANGELOG.md`, `semantic/docs/SCHEMA_CHANGELOG.md` |
 
 Common schema generation commands:
@@ -630,6 +675,7 @@ uv run python .\main.py --schema-output .\sources\aedb\docs\aedb_schema.json
 uv run python .\main.py auroradb schema -o .\sources\auroradb\docs\auroradb_schema.json
 uv run python .\main.py odbpp schema -o .\sources\odbpp\docs\odbpp_schema.json
 uv run python .\main.py schema --format alg -o .\out\alg_schema.json
+uv run python .\main.py schema --format altium -o .\out\altium_schema.json
 uv run python .\main.py semantic schema -o .\semantic\docs\semantic_schema.json
 ```
 
@@ -640,8 +686,8 @@ Versioning has three layers:
 | Layer | Constants | Purpose |
 | --- | --- | --- |
 | Project version | `version.PROJECT_VERSION` | Overall Aurora Translator release version. |
-| Format parser version | `AEDB_PARSER_VERSION` / `AURORADB_PARSER_VERSION` / `ODBPP_PARSER_VERSION` / `BRD_PARSER_VERSION` / `ALG_PARSER_VERSION` | Version for a specific format's parsing logic, performance behavior, or integration path. |
-| Format JSON schema version | `AEDB_JSON_SCHEMA_VERSION` / `AURORADB_JSON_SCHEMA_VERSION` / `ODBPP_JSON_SCHEMA_VERSION` / `BRD_JSON_SCHEMA_VERSION` / `ALG_JSON_SCHEMA_VERSION` | Version for a specific format's JSON output contract. |
+| Format parser version | `AEDB_PARSER_VERSION` / `AURORADB_PARSER_VERSION` / `ODBPP_PARSER_VERSION` / `BRD_PARSER_VERSION` / `ALG_PARSER_VERSION` / `ALTIUM_PARSER_VERSION` | Version for a specific format's parsing logic, performance behavior, or integration path. |
+| Format JSON schema version | `AEDB_JSON_SCHEMA_VERSION` / `AURORADB_JSON_SCHEMA_VERSION` / `ODBPP_JSON_SCHEMA_VERSION` / `BRD_JSON_SCHEMA_VERSION` / `ALG_JSON_SCHEMA_VERSION` / `ALTIUM_JSON_SCHEMA_VERSION` | Version for a specific format's JSON output contract. |
 | Semantic version | `SEMANTIC_PARSER_VERSION` / `SEMANTIC_JSON_SCHEMA_VERSION` | Version for semantic conversion logic and the semantic JSON output contract. |
 
 JSON payloads consistently emit:
@@ -673,12 +719,14 @@ Current versions:
 | AuroraDB JSON schema | `0.2.0` |
 | ODB++ parser | `0.6.3` |
 | ODB++ JSON schema | `0.6.0` |
-| BRD parser | `0.1.5` |
-| BRD JSON schema | `0.4.0` |
+| BRD parser | `0.1.6` |
+| BRD JSON schema | `0.5.0` |
 | ALG parser | `0.1.1` |
 | ALG JSON schema | `0.2.0` |
-| Semantic parser | `0.7.7` |
-| Semantic JSON schema | `0.7.1` |
+| Altium parser | `0.1.0` |
+| Altium JSON schema | `0.1.0` |
+| Semantic parser | `0.7.10` |
+| Semantic JSON schema | `0.7.2` |
 
 ## Development And Build
 

@@ -116,6 +116,22 @@ class BRDPadstack(SchemaModel):
     drill_size_raw: int | None = Field(default=None, ge=0)
     fixed_component_count: int = Field(..., ge=0)
     components_per_layer: int = Field(..., ge=0)
+    components: list["BRDPadstackComponent"] = Field(default_factory=list)
+
+
+class BRDPadstackComponent(SchemaModel):
+    slot_index: int = Field(..., ge=0)
+    layer_index: int | None = Field(default=None, ge=0)
+    role: str
+    component_type: int = Field(..., ge=0)
+    type_name: str
+    width_raw: int
+    height_raw: int
+    z1_raw: int | None = None
+    x_offset_raw: int
+    y_offset_raw: int
+    shape_key: int = Field(..., ge=0)
+    z2_raw: int | None = Field(default=None, ge=0)
 
 
 class BRDComponent(SchemaModel):

@@ -109,4 +109,19 @@ def load_source_payload(
                 rust_binary=load_options.rust_binary,
             )
 
+    if source_format == "altium":
+        from aurora_translator.sources.altium import parse_altium
+
+        with log_timing(
+            logger,
+            "load Altium Designer source payload",
+            banner=True,
+            source=resolved_source,
+        ):
+            return parse_altium(
+                resolved_source,
+                include_details=load_options.include_details,
+                rust_binary=load_options.rust_binary,
+            )
+
     raise ValueError(f"Unsupported source format: {source_format!r}")

@@ -8,13 +8,13 @@
 
 [English](#en) | [返回顶部](#top)
 
-Semantic 模块位于各格式解析器之上。AEDB、AuroraDB 和 ODB++ 仍然保留各自的高保真格式对象，并可按需导出格式 JSON；Semantic 模块负责把这些格式对象或格式 JSON 转换成统一的板级语义模型，用于后续查询、比较、诊断和格式转换。真正的目标格式导出现在位于 `targets/*`，其中当前已实现的是 `targets/auroradb/`。
+Semantic 模块位于各格式解析器之上。AEDB、AuroraDB、ODB++、BRD、ALG 和 Altium 仍然保留各自的高保真格式对象，并可按需导出格式 JSON；Semantic 模块负责把这些格式对象或格式 JSON 转换成统一的板级语义模型，用于后续查询、比较、诊断和格式转换。真正的目标格式导出现在位于 `targets/*`，其中当前已实现的是 `targets/auroradb/` 和 `targets/odbpp/`。
 
 ## 设计边界
 
 - 格式层负责“源格式中有什么”。
 - Semantic 层负责“这些对象在 PCB 语义中是什么”。
-- Semantic 层不反向修改 AEDB、AuroraDB 或 ODB++ 的格式模型。
+- Semantic 层不反向修改 AEDB、AuroraDB、ODB++、BRD、ALG 或 Altium 的格式模型。
 - 当前版本覆盖稳定公共概念：layer、material、shape、via template、net、component、footprint、pin、pad、via、primitive、connectivity edge 和 diagnostics。
 
 ## 数据流
@@ -24,8 +24,11 @@ flowchart TD
     aedb["AEDBLayout JSON"]
     auroradb["AuroraDBModel JSON"]
     odbpp["ODBLayout JSON"]
+    brd["BRDLayout JSON"]
+    alg["ALGLayout JSON"]
+    altium["AltiumLayout JSON"]
 
-    adapters["semantic.adapters<br/>aedb / auroradb / odbpp"]
+    adapters["semantic.adapters<br/>aedb / auroradb / odbpp / brd / alg / altium"]
     board["SemanticBoard"]
     passes["semantic.passes<br/>connectivity + diagnostics"]
     json["Semantic JSON"]
@@ -34,6 +37,9 @@ flowchart TD
     aedb --> adapters
     auroradb --> adapters
     odbpp --> adapters
+    brd --> adapters
+    alg --> adapters
+    altium --> adapters
     adapters --> board --> passes --> json
     board --> aurora_out
 ```
@@ -51,6 +57,9 @@ semantic/
     aedb.py          # AEDBLayout -> SemanticBoard
     auroradb.py      # AuroraDBModel -> SemanticBoard
     odbpp.py         # ODBLayout -> SemanticBoard
+    brd.py           # BRDLayout -> SemanticBoard
+    alg.py           # ALGLayout -> SemanticBoard
+    altium.py        # AltiumLayout -> SemanticBoard
   docs/
     architecture.md
     format_mapping.md
@@ -208,13 +217,13 @@ AEDB 到 semantic 的转换规则见：[aedb_to_semantic.md](aedb_to_semantic.md
 
 [中文](#zh) | [Back to top](#top)
 
-The Semantic module sits above the format parsers. AEDB, AuroraDB, and ODB++ keep their high-fidelity format objects and can optionally export format JSON payloads; the Semantic module converts those objects or payloads into one board-level semantic model for later querying, comparison, diagnostics, and format conversion. The actual target export implementations now live under `targets/*`, with `targets/auroradb/` currently implemented.
+The Semantic module sits above the format parsers. AEDB, AuroraDB, ODB++, BRD, ALG, and Altium keep their high-fidelity format objects and can optionally export format JSON payloads; the Semantic module converts those objects or payloads into one board-level semantic model for later querying, comparison, diagnostics, and format conversion. The actual target export implementations now live under `targets/*`, with `targets/auroradb/` and `targets/odbpp/` currently implemented.
 
 ## Design Boundaries
 
 - The format layer describes what exists in the source format.
 - The Semantic layer describes what those objects mean in PCB terms.
-- The Semantic layer does not mutate AEDB, AuroraDB, or ODB++ format models.
+- The Semantic layer does not mutate AEDB, AuroraDB, ODB++, BRD, ALG, or Altium format models.
 - The current version covers stable shared concepts: layer, material, shape, via template, net, component, footprint, pin, pad, via, primitive, connectivity edge, and diagnostics.
 
 ## Data Flow
@@ -224,8 +233,11 @@ flowchart TD
     aedb["AEDBLayout JSON"]
     auroradb["AuroraDBModel JSON"]
     odbpp["ODBLayout JSON"]
+    brd["BRDLayout JSON"]
+    alg["ALGLayout JSON"]
+    altium["AltiumLayout JSON"]
 
-    adapters["semantic.adapters<br/>aedb / auroradb / odbpp"]
+    adapters["semantic.adapters<br/>aedb / auroradb / odbpp / brd / alg / altium"]
     board["SemanticBoard"]
     passes["semantic.passes<br/>connectivity + diagnostics"]
     json["Semantic JSON"]
@@ -234,6 +246,9 @@ flowchart TD
     aedb --> adapters
     auroradb --> adapters
     odbpp --> adapters
+    brd --> adapters
+    alg --> adapters
+    altium --> adapters
     adapters --> board --> passes --> json
     board --> aurora_out
 ```
@@ -251,6 +266,9 @@ semantic/
     aedb.py          # AEDBLayout -> SemanticBoard
     auroradb.py      # AuroraDBModel -> SemanticBoard
     odbpp.py         # ODBLayout -> SemanticBoard
+    brd.py           # BRDLayout -> SemanticBoard
+    alg.py           # ALGLayout -> SemanticBoard
+    altium.py        # AltiumLayout -> SemanticBoard
   docs/
     architecture.md
     format_mapping.md

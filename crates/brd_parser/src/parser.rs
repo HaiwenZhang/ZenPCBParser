@@ -1,7 +1,7 @@
 use crate::model::{
     BlockSummary, Component, ComponentInstance, Footprint, FootprintInstance, Header, Keepout,
     Layer, LayerInfo, LayerMapEntry, LinkedList, Net, NetAssignment, PadDefinition, Padstack,
-    PlacedPad, Segment, Shape, StringEntry, Summary, Text, Track, Via,
+    PadstackComponent, PlacedPad, Segment, Shape, StringEntry, Summary, Text, Track, Via,
 };
 use std::collections::{BTreeMap, HashMap};
 use thiserror::Error;
@@ -1146,20 +1146,44 @@ fn parse_padstack(
         4
     };
     let component_count = fixed_component_count + layer_count as usize * components_per_layer;
+    let mut components = Vec::with_capacity(component_count);
     for index in 0..component_count {
-        reader.skip(4)?;
+        let component_type = reader.u8()?;
+        reader.skip(3)?;
         if version.ge(FormatVersion::V172) {
             reader.skip_u32(1)?;
         }
-        reader.skip(8)?;
-        if version.ge(FormatVersion::V172) {
-            reader.skip(4)?;
-        }
-        reader.skip(8)?;
-        reader.skip_u32(1)?;
-        if version.ge(FormatVersion::V172) || index < component_count - 1 {
-            reader.skip_u32(1)?;
-        }
+        let width_raw = reader.i32()?;
+        let height_raw = reader.i32()?;
+        let z1_raw = if version.ge(FormatVersion::V172) {
+            Some(reader.i32()?)
+        } else {
+            None
+        };
+        let x_offset_raw = reader.i32()?;
+        let y_offset_raw = reader.i32()?;
+        let shape_key = reader.u32()?;
+        let z2_raw = if version.ge(FormatVersion::V172) || index < component_count - 1 {
+            Some(reader.u32()?)
+        } else {
+            None
+        };
+        let (layer_index, role) =
+            padstack_component_role(index, fixed_component_count, components_per_layer);
+        components.push(PadstackComponent {
+            slot_index: index,
+            layer_index,
+            role: role.to_string(),
+            component_type,
+            type_name: padstack_component_type_name(component_type).to_string(),
+            width_raw,
+            height_raw,
+            z1_raw,
+            x_offset_raw,
+            y_offset_raw,
+            shape_key,
+            z2_raw,
+        });
     }
     let trailing = n as usize
         * if version.lt(FormatVersion::V172) {
@@ -1180,9 +1204,56 @@ fn parse_padstack(
             drill_size_raw,
             fixed_component_count,
             components_per_layer,
+            components,
         }),
         ..BlockParse::default()
     })
+}
+
+fn padstack_component_role(
+    index: usize,
+    fixed_component_count: usize,
+    components_per_layer: usize,
+) -> (Option<usize>, &'static str) {
+    if index < fixed_component_count || components_per_layer == 0 {
+        return (None, "fixed");
+    }
+    let relative = index - fixed_component_count;
+    let layer_index = relative / components_per_layer;
+    let role = match relative % components_per_layer {
+        0 => "antipad",
+        1 => "thermal_relief",
+        2 => "pad",
+        3 => "keepout",
+        _ => "unknown",
+    };
+    (Some(layer_index), role)
+}
+
+fn padstack_component_type_name(component_type: u8) -> &'static str {
+    match component_type {
+        0x00 => "NULL",
+        0x02 => "CIRCLE",
+        0x03 => "OCTAGON",
+        0x04 => "CROSS",
+        0x05 => "SQUARE",
+        0x06 => "RECTANGLE",
+        0x07 => "DIAMOND",
+        0x0A => "PENTAGON",
+        0x0B => "OBLONG_X",
+        0x0C => "OBLONG_Y",
+        0x0F => "HEXAGON_X",
+        0x10 => "HEXAGON_Y",
+        0x12 => "TRIANGLE",
+        0x16 => "SHAPE_SYMBOL",
+        0x17 => "FLASH",
+        0x19 => "DONUT",
+        0x1B => "ROUNDED_RECTANGLE",
+        0x1C => "CHAMFERED_RECTANGLE",
+        0x1E => "NSIDED_POLYGON",
+        0xEE => "APERTURE_EXT",
+        _ => "UNKNOWN",
+    }
 }
 
 fn parse_constraint_set(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from math import radians
 import sys
 import unittest
 from pathlib import Path
@@ -178,6 +179,85 @@ class BRDSemanticAdapterTests(unittest.TestCase):
         self.assertEqual(board.components[0].package_name, "C01005")
         self.assertEqual(board.pads[0].net_id, board.nets[0].id)
         self.assertEqual(board.vias[0].template_id, board.via_templates[0].id)
+
+    def test_brd_partpad_rotation_uses_footprint_local_hint(self) -> None:
+        from aurora_translator.semantic.models import (
+            SemanticComponent,
+            SemanticPad,
+            SemanticPadGeometry,
+        )
+        from aurora_translator.targets.auroradb.parts import (
+            _format_footprint_pad_rotation,
+        )
+
+        component = SemanticComponent(
+            id="component:j4802",
+            refdes="J4802",
+            rotation=radians(90),
+            source={"source_format": "brd", "path": "component"},
+        )
+        pad = SemanticPad(
+            id="pad:j4802:1",
+            geometry=SemanticPadGeometry(
+                rotation=radians(90),
+                footprint_rotation=0,
+            ),
+            source={"source_format": "brd", "path": "pad"},
+        )
+
+        self.assertEqual(
+            _format_footprint_pad_rotation(pad, component, source_format="brd"),
+            "0",
+        )
+
+    def test_brd_rectangular_pad_rotation_is_half_turn_symmetric(self) -> None:
+        from aurora_translator.semantic.adapters.brd import (
+            _pad_local_rotation_for_footprint,
+        )
+        from aurora_translator.sources.brd.models import (
+            BRDPadDefinition,
+            BRDPadstack,
+            BRDPadstackComponent,
+        )
+
+        padstack = BRDPadstack(
+            key=1,
+            next=0,
+            name_string_id=0,
+            name="R0D95X0D3",
+            layer_count=1,
+            fixed_component_count=1,
+            components_per_layer=1,
+            components=[
+                BRDPadstackComponent(
+                    slot_index=0,
+                    layer_index=0,
+                    role="pad",
+                    component_type=1,
+                    type_name="rectangle",
+                    width_raw=9500,
+                    height_raw=3000,
+                    x_offset_raw=0,
+                    y_offset_raw=0,
+                    shape_key=0,
+                )
+            ],
+        )
+        pad_definition = BRDPadDefinition(
+            key=2,
+            next=0,
+            name_string_id=0,
+            x_raw=0,
+            y_raw=0,
+            padstack=1,
+            flags=0,
+            rotation_mdeg=180000,
+        )
+
+        self.assertEqual(
+            _pad_local_rotation_for_footprint(pad_definition, padstack),
+            0,
+        )
 
 
 if __name__ == "__main__":

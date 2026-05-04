@@ -18,7 +18,7 @@ class SchemaModel(BaseModel):
 
 
 class SourceRef(SchemaModel):
-    source_format: Literal["aedb", "auroradb", "odbpp", "brd", "alg"] = Field(
+    source_format: Literal["aedb", "auroradb", "odbpp", "brd", "alg", "altium"] = Field(
         ..., description="Source payload format."
     )
     path: str | None = Field(
@@ -57,7 +57,7 @@ class SemanticMetadata(SchemaModel):
         default=SEMANTIC_JSON_SCHEMA_VERSION,
         description="Semantic JSON schema version.",
     )
-    source_format: Literal["aedb", "auroradb", "odbpp", "brd", "alg"] = Field(
+    source_format: Literal["aedb", "auroradb", "odbpp", "brd", "alg", "altium"] = Field(
         ..., description="Source payload format."
     )
     source: str | None = Field(

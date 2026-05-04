@@ -15,6 +15,8 @@ Machine-readable JSON schemas are maintained by source or semantic package:
 - ODB++: `sources/odbpp/docs/odbpp_schema.json`
 - Semantic: `semantic/docs/semantic_schema.json`
 - BRD: generated from `sources/brd/models.py` through the unified schema command
+- ALG: generated from `sources/alg/models.py` through the unified schema command
+- Altium: generated from `sources/altium/models.py` through the unified schema command
 
 ## Rule
 

@@ -3,8 +3,8 @@
 version = 4
 
 [[package]]
-name = "brd_parser"
-version = "0.1.6"
+name = "altium_parser"
+version = "0.1.0"
 dependencies = [
  "pyo3",
  "pythonize",

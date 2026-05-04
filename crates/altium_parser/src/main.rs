@@ -1,4 +1,6 @@
-use aurora_brd_native::{build_payload, BuildPayloadOptions, BACKEND_CLI, RUST_PARSER_VERSION};
+use aurora_altium_native::{
+    build_payload, BuildPayloadOptions, BACKEND_CLI, RUST_PARSER_VERSION,
+};
 use std::env;
 use std::fs;
 use std::path::PathBuf;
@@ -65,7 +67,7 @@ fn parse_args(args: Vec<String>) -> Result<CliOptions, String> {
     let mut indent = Some(2);
     let mut project_version = "unknown".to_string();
     let mut parser_version = RUST_PARSER_VERSION.to_string();
-    let mut schema_version = "0.5.0".to_string();
+    let mut schema_version = "0.1.0".to_string();
     let mut index = 0;
     while index < args.len() {
         match args[index].as_str() {
@@ -129,15 +131,15 @@ fn value_at(args: &[String], index: usize, option: &str) -> Result<String, Strin
 }
 
 fn help_text() -> String {
-    "Usage: brd_parser <board.brd> [--summary-only] [-o OUTPUT]\n\
+    "Usage: altium_parser <board.PcbDoc> [--summary-only] [-o OUTPUT]\n\
      \n\
      Options:\n\
-       --summary-only           Read header, strings, and object summaries only.\n\
+       --summary-only           Read container and stream summaries only.\n\
        -o, --output PATH        Write JSON to a file instead of stdout.\n\
        --indent N               Pretty-print JSON with N spaces. Default: 2.\n\
        --compact                Emit compact JSON.\n\
        --project-version VALUE  Metadata project version injected by Aurora Translator.\n\
-       --parser-version VALUE   BRD parser version injected by Aurora Translator.\n\
-       --schema-version VALUE   BRD JSON schema version injected by Aurora Translator."
+       --parser-version VALUE   Altium parser version injected by Aurora Translator.\n\
+       --schema-version VALUE   Altium JSON schema version injected by Aurora Translator."
         .to_string()
 }

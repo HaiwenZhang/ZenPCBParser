@@ -20,6 +20,7 @@ from aurora_translator.shared.jsonio import write_json_file
 from aurora_translator.shared.logging import log_run_complete
 from aurora_translator.sources.aedb import AEDBParserError
 from aurora_translator.sources.alg import ALGParserError
+from aurora_translator.sources.altium import AltiumParserError
 from aurora_translator.sources.brd import BRDParserError
 from aurora_translator.sources.odbpp import ODBPPParserError
 
@@ -221,6 +222,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         except (
             AEDBParserError,
             ALGParserError,
+            AltiumParserError,
             ODBPPParserError,
             BRDParserError,
             OSError,
@@ -263,6 +265,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         except (
             AEDBParserError,
             ALGParserError,
+            AltiumParserError,
             ODBPPParserError,
             BRDParserError,
             OSError,
@@ -342,6 +345,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     except (
         AEDBParserError,
         ALGParserError,
+        AltiumParserError,
         ODBPPParserError,
         BRDParserError,
         OSError,

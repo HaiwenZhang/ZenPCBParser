@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Literal
 
 
-SourceFormat = Literal["aedb", "auroradb", "odbpp", "brd", "alg"]
+SourceFormat = Literal["aedb", "auroradb", "odbpp", "brd", "alg", "altium"]
 TargetFormat = Literal["aaf", "auroradb", "odbpp"]
 AEDBParseProfile = Literal["full", "auroradb-minimal"]
 

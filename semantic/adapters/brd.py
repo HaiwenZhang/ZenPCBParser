@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-from math import cos, radians, sin
+from math import cos, degrees, radians, sin
 import re
 from typing import Iterable
 
@@ -49,6 +49,8 @@ from aurora_translator.sources.brd.models import (
     BRDLayer,
     BRDLayout,
     BRDPadDefinition,
+    BRDPadstack,
+    BRDPadstackComponent,
     BRDPlacedPad,
     BRDSegment,
     BRDShape,
@@ -72,6 +74,10 @@ _POB_NAME_RE = re.compile(
     re.IGNORECASE,
 )
 _POB_OFFSET_RE = re.compile(r"_OS(?P<x>[0-9D]+)X(?P<y>[0-9D]+)", re.IGNORECASE)
+_CIRCLE_PADSTACK_NAME_RE = re.compile(r"^C(?P<diameter>[0-9D]+)(?:_|$)", re.IGNORECASE)
+REF_DES_CLASS_CODE = 0x0D
+REF_DES_BOTTOM_SUBCLASS_CODE = 0xFC
+REF_DES_TOP_SUBCLASS_CODE = 0xFD
 
 
 @dataclass(slots=True)
@@ -91,6 +97,9 @@ class _PadRecord:
     side: str | None
     component_location: SemanticPoint | None
     component_rotation: float | None
+    pad_rotation: float | None
+    footprint_pad_rotation: float | None
+    via_rotation: float | None
     via_position: SemanticPoint | None
 
 
@@ -116,16 +125,26 @@ def from_brd(payload: BRDLayout, *, build_connectivity: bool = True) -> Semantic
     shapes: list[SemanticShape] = []
     shape_ids_by_key: dict[tuple[str, tuple[object, ...]], str] = {}
 
+    pad_definitions_by_key = {pad.key: pad for pad in payload.pad_definitions or []}
+    padstack_template_rotations = _padstack_template_rotations(payload)
     via_templates, via_template_ids_by_padstack = _semantic_via_templates(
         payload,
         layer_names,
+        padstack_template_rotations,
         shapes,
         shape_ids_by_key,
     )
     instance_footprint_names = _instance_footprint_names(payload)
-    component_infos = _component_infos(payload, top_layer, bottom_layer)
+    texts_by_key = {text.key: text for text in payload.texts or []}
+    component_infos = _component_infos(
+        payload,
+        layer_names,
+        top_layer,
+        bottom_layer,
+        texts_by_key,
+    )
     text_values_by_key = _text_values_by_key(payload.texts or [])
-    pad_definitions_by_key = {pad.key: pad for pad in payload.pad_definitions or []}
+    padstacks_by_key = {padstack.key: padstack for padstack in payload.padstacks or []}
     padstack_names_by_key = {
         padstack.key: padstack.name or f"Padstack_{padstack.key}"
         for padstack in payload.padstacks or []
@@ -138,6 +157,7 @@ def from_brd(payload: BRDLayout, *, build_connectivity: bool = True) -> Semantic
         component_infos,
         text_values_by_key,
         pad_definitions_by_key,
+        padstacks_by_key,
         padstack_names_by_key,
         shapes,
         shape_ids_by_key,
@@ -348,6 +368,7 @@ def _no_net_id(payload: BRDLayout) -> str:
 def _semantic_via_templates(
     payload: BRDLayout,
     layer_names: list[str],
+    padstack_template_rotations: dict[int, float],
     shapes: list[SemanticShape],
     shape_ids_by_key: dict[tuple[str, tuple[object, ...]], str],
 ) -> tuple[list[SemanticViaTemplate], dict[int, str]]:
@@ -360,38 +381,67 @@ def _semantic_via_templates(
             barrel_diameter = _raw_length_to_semantic(payload, padstack.drill_size_raw)
         if barrel_diameter is None or barrel_diameter <= 0:
             barrel_diameter = DEFAULT_PAD_DIAMETER_MM
+        template_rotation = padstack_template_rotations.get(padstack.key)
         barrel_shape_id = _padstack_barrel_shape_id(
             payload,
             padstack,
             index,
             barrel_diameter,
+            template_rotation,
             shapes,
             shape_ids_by_key,
         )
         pad_shape_id = _padstack_layer_pad_shape_id(
+            payload,
             padstack,
             index,
             pad_diameter or barrel_diameter,
             barrel_shape_id,
             shapes,
             shape_ids_by_key,
+            template_rotation=template_rotation,
         )
         template_id = semantic_id("via_template", padstack.name or padstack.key, index)
+        layer_indices = _padstack_layer_indices(padstack, layer_names)
+        layer_pads = [
+            SemanticViaTemplateLayer(
+                layer_name=layer_name,
+                pad_shape_id=_padstack_layer_pad_shape_id(
+                    payload,
+                    padstack,
+                    index,
+                    pad_diameter or barrel_diameter,
+                    barrel_shape_id,
+                    shapes,
+                    shape_ids_by_key,
+                    layer_index=layer_index,
+                    template_rotation=template_rotation,
+                ),
+            )
+            for layer_name, layer_index in zip(layer_span, layer_indices)
+        ]
+        if not layer_pads:
+            layer_pads = [
+                SemanticViaTemplateLayer(
+                    layer_name=layer_name,
+                    pad_shape_id=pad_shape_id,
+                )
+                for layer_name in layer_span
+            ]
         via_templates.append(
             SemanticViaTemplate(
                 id=template_id,
                 name=padstack.name or f"Padstack_{padstack.key}",
                 barrel_shape_id=barrel_shape_id,
-                layer_pads=[
-                    SemanticViaTemplateLayer(
-                        layer_name=layer_name,
-                        pad_shape_id=pad_shape_id,
-                    )
-                    for layer_name in layer_span
-                ],
+                layer_pads=layer_pads,
                 geometry=SemanticViaTemplateGeometry(
-                    source="brd_padstack_drill",
+                    source="brd_padstack_components"
+                    if padstack.components
+                    else "brd_padstack_drill",
                     symbol=padstack.name,
+                    layer_pad_source="brd_padstack_components"
+                    if padstack.components
+                    else None,
                 ),
                 source=source_ref("brd", f"padstacks[{index}]", padstack.key),
             )
@@ -429,9 +479,29 @@ def _padstack_layer_names(padstack, layer_names: list[str]) -> list[str]:
     return [layer_names[0]]
 
 
+def _padstack_layer_indices(padstack, layer_names: list[str]) -> list[int]:
+    if not layer_names:
+        return []
+    named_span = _padstack_name_layer_index_span(
+        getattr(padstack, "name", None), layer_names
+    )
+    if named_span:
+        return named_span
+    if getattr(padstack, "layer_count", 0) > 1:
+        return list(range(min(len(layer_names), int(padstack.layer_count))))
+    return [0]
+
+
 def _padstack_name_layer_span(
     padstack_name: str | None, layer_names: list[str]
 ) -> list[str]:
+    indices = _padstack_name_layer_index_span(padstack_name, layer_names)
+    return [layer_names[index] for index in indices]
+
+
+def _padstack_name_layer_index_span(
+    padstack_name: str | None, layer_names: list[str]
+) -> list[int]:
     if not padstack_name:
         return []
     match = _BLIND_VIA_NAME_RE.match(padstack_name)
@@ -442,7 +512,7 @@ def _padstack_name_layer_span(
     if start is None or end is None:
         return []
     low, high = sorted((start, end))
-    return layer_names[low : high + 1]
+    return list(range(low, high + 1))
 
 
 def _via_layer_index(value: str, layer_names: list[str]) -> int | None:
@@ -486,12 +556,18 @@ def _padstack_barrel_shape_id(
     padstack,
     padstack_index: int,
     fallback_diameter: float,
+    template_rotation: float | None,
     shapes: list[SemanticShape],
     shape_ids_by_key: dict[tuple[str, tuple[object, ...]], str],
 ) -> str:
     pob = _pob_dimensions(padstack.name)
     if pob is not None:
         barrel_width, barrel_height, _, _ = pob
+        barrel_width, barrel_height = _rotate_dimensions_by_degrees(
+            barrel_width,
+            barrel_height,
+            template_rotation,
+        )
         return _rect_cut_corner_shape_id(
             shapes,
             shape_ids_by_key,
@@ -515,16 +591,36 @@ def _padstack_barrel_shape_id(
 
 
 def _padstack_layer_pad_shape_id(
+    payload: BRDLayout,
     padstack,
     padstack_index: int,
     fallback_diameter: float,
     barrel_shape_id: str,
     shapes: list[SemanticShape],
     shape_ids_by_key: dict[tuple[str, tuple[object, ...]], str],
+    *,
+    layer_index: int = 0,
+    template_rotation: float | None = None,
 ) -> str:
     pob = _pob_dimensions(padstack.name)
     if pob is not None:
         _, _, pad_width, pad_height = pob
+        pad_width, pad_height = _rotate_dimensions_by_degrees(
+            pad_width,
+            pad_height,
+            template_rotation,
+        )
+        offset = _pob_offset_for_template(padstack.name)
+        if offset:
+            return _oblong_polygon_shape_id(
+                shapes,
+                shape_ids_by_key,
+                width=pad_width,
+                height=pad_height,
+                offset=offset,
+                source_path=f"padstacks[{padstack_index}].name",
+                source_key=padstack.key,
+            )
         return _rect_cut_corner_shape_id(
             shapes,
             shape_ids_by_key,
@@ -533,6 +629,20 @@ def _padstack_layer_pad_shape_id(
             source_path=f"padstacks[{padstack_index}].name",
             source_key=padstack.key,
         )
+
+    component_shape_id = _padstack_component_shape_id(
+        payload,
+        _padstack_layer_component(padstack, layer_index, "pad"),
+        padstack,
+        fallback_width=fallback_diameter,
+        fallback_height=fallback_diameter,
+        shapes=shapes,
+        shape_ids_by_key=shape_ids_by_key,
+        source_path=f"padstacks[{padstack_index}].components",
+        source_key=padstack.key,
+    )
+    if component_shape_id is not None:
+        return component_shape_id
     if fallback_diameter <= 0:
         return barrel_shape_id
     return _shape_id(
@@ -552,10 +662,12 @@ def _rect_cut_corner_shape_id(
     *,
     width: float,
     height: float,
+    radius: float | None = None,
     source_path: str,
     source_key: object,
 ) -> str:
-    radius = min(abs(width), abs(height)) / 2.0
+    if radius is None or radius <= 0:
+        radius = min(abs(width), abs(height)) / 2.0
     return _shape_id(
         shapes,
         shape_ids_by_key,
@@ -594,6 +706,238 @@ def _allegro_decimal(value: str | None) -> float | None:
         return None
 
 
+def _circle_name_diameter(padstack_name: str | None) -> float | None:
+    if not padstack_name:
+        return None
+    match = _CIRCLE_PADSTACK_NAME_RE.match(padstack_name)
+    if match is None:
+        return None
+    return _allegro_decimal(match.group("diameter"))
+
+
+def _padstack_layer_component(
+    padstack: BRDPadstack | None,
+    layer_index: int,
+    role: str,
+) -> BRDPadstackComponent | None:
+    if padstack is None:
+        return None
+    for component in padstack.components or []:
+        if component.layer_index == layer_index and component.role == role:
+            return component
+    return None
+
+
+def _padstack_component_shape_id(
+    payload: BRDLayout,
+    component: BRDPadstackComponent | None,
+    padstack: BRDPadstack,
+    *,
+    fallback_width: float,
+    fallback_height: float,
+    shapes: list[SemanticShape],
+    shape_ids_by_key: dict[tuple[str, tuple[object, ...]], str],
+    source_path: str,
+    source_key: object,
+) -> str | None:
+    if component is None or component.component_type == 0:
+        return None
+    width = _raw_length_to_semantic(payload, component.width_raw) or fallback_width
+    height = _raw_length_to_semantic(payload, component.height_raw) or fallback_height
+    if width <= 0 or height <= 0:
+        return None
+
+    type_name = component.type_name.casefold()
+    if type_name == "circle":
+        return _shape_id(
+            shapes,
+            shape_ids_by_key,
+            kind="circle",
+            auroradb_type="Circle",
+            values=[0.0, 0.0, max(width, height)],
+            source_path=source_path,
+            source_key=source_key,
+        )
+    if type_name == "square":
+        side = max(width, height)
+        return _rectangle_shape_id(
+            shapes,
+            shape_ids_by_key,
+            width=side,
+            height=side,
+            source_path=source_path,
+            source_key=source_key,
+        )
+    if type_name == "rectangle":
+        return _rectangle_shape_id(
+            shapes,
+            shape_ids_by_key,
+            width=width,
+            height=height,
+            source_path=source_path,
+            source_key=source_key,
+        )
+    if type_name in {"oblong_x", "oblong_y", "rounded_rectangle"}:
+        radius = _raw_length_to_semantic(payload, component.z1_raw)
+        if radius is None or radius <= 0:
+            radius = min(width, height) / 2.0
+        return _rect_cut_corner_shape_id(
+            shapes,
+            shape_ids_by_key,
+            width=width,
+            height=height,
+            radius=radius,
+            source_path=source_path,
+            source_key=source_key,
+        )
+    if type_name == "shape_symbol":
+        shape_id = _shape_symbol_shape_id(
+            payload,
+            component,
+            shapes,
+            shape_ids_by_key,
+            source_path=source_path,
+            source_key=source_key,
+        )
+        if shape_id is not None:
+            return shape_id
+        return _rectangle_shape_id(
+            shapes,
+            shape_ids_by_key,
+            width=width,
+            height=height,
+            source_path=source_path,
+            source_key=source_key,
+        )
+    return _rectangle_shape_id(
+        shapes,
+        shape_ids_by_key,
+        width=width,
+        height=height,
+        source_path=source_path,
+        source_key=source_key,
+    )
+
+
+def _rectangle_shape_id(
+    shapes: list[SemanticShape],
+    shape_ids_by_key: dict[tuple[str, tuple[object, ...]], str],
+    *,
+    width: float,
+    height: float,
+    source_path: str,
+    source_key: object,
+) -> str:
+    return _shape_id(
+        shapes,
+        shape_ids_by_key,
+        kind="rectangle",
+        auroradb_type="Rectangle",
+        values=[0.0, 0.0, width, height],
+        source_path=source_path,
+        source_key=source_key,
+    )
+
+
+def _oblong_polygon_shape_id(
+    shapes: list[SemanticShape],
+    shape_ids_by_key: dict[tuple[str, tuple[object, ...]], str],
+    *,
+    width: float,
+    height: float,
+    offset: float,
+    rotation_degrees: float | None = None,
+    source_path: str,
+    source_key: object,
+) -> str:
+    radius = min(abs(width), abs(height)) / 2.0
+    if radius <= 0:
+        return _rectangle_shape_id(
+            shapes,
+            shape_ids_by_key,
+            width=width,
+            height=height,
+            source_path=source_path,
+            source_key=source_key,
+        )
+
+    if abs(height) >= abs(width):
+        half_straight = (abs(height) - abs(width)) / 2.0
+        vertices = [
+            (offset + radius, half_straight),
+            (offset + radius, -half_straight),
+            (offset - radius, -half_straight, offset, -half_straight, "N"),
+            (offset - radius, half_straight),
+            (offset + radius, half_straight, offset, half_straight, "N"),
+        ]
+    else:
+        half_straight = (abs(width) - abs(height)) / 2.0
+        vertices = [
+            (offset - half_straight, radius),
+            (offset + half_straight, radius),
+            (offset + half_straight, -radius, offset + half_straight, 0, "N"),
+            (offset - half_straight, -radius),
+            (offset - half_straight, radius, offset - half_straight, 0, "N"),
+        ]
+    values = [
+        5,
+        *[
+            _format_polygon_shape_vertex(vertex, rotation_degrees)
+            for vertex in vertices
+        ],
+        "Y",
+        "Y",
+    ]
+
+    return _shape_id(
+        shapes,
+        shape_ids_by_key,
+        kind="polygon",
+        auroradb_type="Polygon",
+        values=values,
+        source_path=source_path,
+        source_key=source_key,
+    )
+
+
+def _shape_symbol_shape_id(
+    payload: BRDLayout,
+    component: BRDPadstackComponent,
+    shapes: list[SemanticShape],
+    shape_ids_by_key: dict[tuple[str, tuple[object, ...]], str],
+    *,
+    source_path: str,
+    source_key: object,
+) -> str | None:
+    shape_key = component.shape_key or component.z2_raw
+    if not shape_key:
+        return None
+    source_shape = next(
+        (shape for shape in payload.shapes or [] if shape.key == shape_key),
+        None,
+    )
+    if source_shape is None:
+        return None
+    segments_by_key = {segment.key: segment for segment in payload.segments or []}
+    _, values = _outline_chain_values(
+        payload,
+        source_shape.first_segment,
+        source_shape.key,
+        segments_by_key,
+    )
+    if len(values) < 3:
+        return None
+    return _shape_id(
+        shapes,
+        shape_ids_by_key,
+        kind="polygon",
+        auroradb_type="Polygon",
+        values=[len(values), *values, "Y", "Y"],
+        source_path=source_path,
+        source_key=source_key,
+    )
+
+
 def _padstack_via_position(
     padstack_name: str | None,
     pad_definition: BRDPadDefinition | None,
@@ -626,6 +970,177 @@ def _pob_offset(padstack_name: str | None) -> tuple[float, float] | None:
     return offset_x, offset_y
 
 
+def _pob_offset_for_template(padstack_name: str | None) -> float:
+    offset = _pob_offset(padstack_name)
+    if offset is None:
+        return 0.0
+    offset_x, offset_y = offset
+    if offset_x != 0:
+        return offset_x
+    return offset_y
+
+
+def _rotate_dimensions_by_degrees(
+    width: float,
+    height: float,
+    rotation_degrees: float | None,
+) -> tuple[float, float]:
+    if rotation_degrees is None:
+        return width, height
+    normalized = int(round(rotation_degrees)) % 180
+    if normalized == 90:
+        return height, width
+    return width, height
+
+
+def _rotate_point_degrees(
+    x: float,
+    y: float,
+    rotation_degrees: float | None,
+) -> tuple[float, float]:
+    if rotation_degrees is None:
+        return x, y
+    normalized = float(rotation_degrees) % 360.0
+    if abs(normalized) <= 1e-9 or abs(normalized - 360.0) <= 1e-9:
+        return x, y
+    angle = radians(rotation_degrees)
+    return x * cos(angle) - y * sin(angle), x * sin(angle) + y * cos(angle)
+
+
+def _format_polygon_shape_vertex(
+    vertex: tuple[float, float] | tuple[float, float, float, float, str],
+    rotation_degrees: float | None,
+) -> str:
+    x, y = _rotate_point_degrees(vertex[0], vertex[1], rotation_degrees)
+    if len(vertex) == 2:
+        return f"({_shape_coordinate_text(x)},{_shape_coordinate_text(y)})"
+    center_x, center_y = _rotate_point_degrees(vertex[2], vertex[3], rotation_degrees)
+    return (
+        f"({_shape_coordinate_text(x)},{_shape_coordinate_text(y)},"
+        f"{_shape_coordinate_text(center_x)},{_shape_coordinate_text(center_y)},"
+        f"{vertex[4]})"
+    )
+
+
+def _shape_coordinate_text(value: float) -> str:
+    if abs(value) <= 1e-12:
+        value = 0.0
+    text = f"{value:.12f}".rstrip("0").rstrip(".")
+    return text or "0"
+
+
+def _degrees(rotation: float) -> float:
+    return degrees(rotation)
+
+
+def _padstack_template_rotations(payload: BRDLayout) -> dict[int, float]:
+    rotations_by_padstack: dict[int, set[int]] = defaultdict(set)
+    for pad_definition in payload.pad_definitions or []:
+        rotations_by_padstack[pad_definition.padstack].add(
+            int(round(float(pad_definition.rotation_mdeg or 0) / 1000.0)) % 360
+        )
+    result: dict[int, float] = {}
+    for padstack_key, rotations in rotations_by_padstack.items():
+        if len(rotations) == 1:
+            result[padstack_key] = float(next(iter(rotations)))
+    return result
+
+
+def _placed_pad_shape_id(
+    payload: BRDLayout,
+    pad_definition: BRDPadDefinition | None,
+    padstack: BRDPadstack | None,
+    *,
+    width: float,
+    height: float,
+    placed_pad_index: int,
+    placed_pad_key: int,
+    shapes: list[SemanticShape],
+    shape_ids_by_key: dict[tuple[str, tuple[object, ...]], str],
+    footprint_rotation_degrees: float | None = None,
+) -> str:
+    if padstack is not None:
+        pob = _pob_dimensions(padstack.name)
+        if pob is not None:
+            _, _, pad_width, pad_height = pob
+            rotation_degrees = (
+                float(pad_definition.rotation_mdeg or 0) / 1000.0
+                if pad_definition is not None
+                else 0.0
+            )
+            pad_width, pad_height = _rotate_dimensions_by_degrees(
+                pad_width,
+                pad_height,
+                rotation_degrees,
+            )
+            offset = _pob_offset_for_template(padstack.name)
+            if offset:
+                return _oblong_polygon_shape_id(
+                    shapes,
+                    shape_ids_by_key,
+                    width=pad_width,
+                    height=pad_height,
+                    offset=offset,
+                    rotation_degrees=(
+                        -footprint_rotation_degrees
+                        if footprint_rotation_degrees is not None
+                        else None
+                    ),
+                    source_path="padstacks.name",
+                    source_key=padstack.key,
+                )
+            pad_width, pad_height = _rotate_dimensions_by_degrees(
+                pad_width,
+                pad_height,
+                -footprint_rotation_degrees
+                if footprint_rotation_degrees is not None
+                else None,
+            )
+            return _rect_cut_corner_shape_id(
+                shapes,
+                shape_ids_by_key,
+                width=pad_width,
+                height=pad_height,
+                source_path="padstacks.name",
+                source_key=padstack.key,
+            )
+        component = _padstack_layer_component(padstack, 0, "pad")
+        shape_id = _padstack_component_shape_id(
+            payload,
+            component,
+            padstack,
+            fallback_width=width,
+            fallback_height=height,
+            shapes=shapes,
+            shape_ids_by_key=shape_ids_by_key,
+            source_path="padstacks.components",
+            source_key=padstack.key,
+        )
+        if shape_id is not None:
+            return shape_id
+        circle_diameter = _circle_name_diameter(padstack.name)
+        if circle_diameter is not None and circle_diameter > 0:
+            return _shape_id(
+                shapes,
+                shape_ids_by_key,
+                kind="circle",
+                auroradb_type="Circle",
+                values=[0.0, 0.0, circle_diameter],
+                source_path="padstacks.name",
+                source_key=padstack.key,
+            )
+
+    return _shape_id(
+        shapes,
+        shape_ids_by_key,
+        kind="rectangle",
+        auroradb_type="Rectangle",
+        values=[0.0, 0.0, width, height],
+        source_path=f"placed_pads[{placed_pad_index}].coords_raw",
+        source_key=placed_pad_key,
+    )
+
+
 def _placed_pad_records(
     payload: BRDLayout,
     top_layer: str | None,
@@ -634,6 +1149,7 @@ def _placed_pad_records(
     component_infos: dict[int, _ComponentInfo],
     text_values_by_key: dict[int, str],
     pad_definitions_by_key: dict[int, BRDPadDefinition],
+    padstacks_by_key: dict[int, BRDPadstack],
     padstack_names_by_key: dict[int, str],
     shapes: list[SemanticShape],
     shape_ids_by_key: dict[tuple[str, tuple[object, ...]], str],
@@ -653,20 +1169,34 @@ def _placed_pad_records(
         height = abs(y_max - y_min)
         if width <= 0 or height <= 0:
             continue
-        center = SemanticPoint(x=(x_min + x_max) / 2.0, y=(y_min + y_max) / 2.0)
-        shape_id = _shape_id(
-            shapes,
-            shape_ids_by_key,
-            kind="rectangle",
-            auroradb_type="Rectangle",
-            values=[0.0, 0.0, width, height],
-            source_path=f"placed_pads[{index}].coords_raw",
-            source_key=placed_pad.key,
+        copper_center = SemanticPoint(
+            x=(x_min + x_max) / 2.0,
+            y=(y_min + y_max) / 2.0,
+        )
+        pad_definition = pad_definitions_by_key.get(placed_pad.pad)
+        padstack = (
+            padstacks_by_key.get(pad_definition.padstack)
+            if pad_definition is not None
+            else None
         )
         footprint_name = instance_footprint_names.get(
             placed_pad.parent_footprint, f"BRD_FOOTPRINT_{placed_pad.parent_footprint}"
         )
         component_info = component_infos.get(placed_pad.parent_footprint)
+        shape_id = _placed_pad_shape_id(
+            payload,
+            pad_definition,
+            padstack,
+            width=width,
+            height=height,
+            placed_pad_index=index,
+            placed_pad_key=placed_pad.key,
+            footprint_rotation_degrees=(
+                _degrees(component_info.rotation) if component_info else None
+            ),
+            shapes=shapes,
+            shape_ids_by_key=shape_ids_by_key,
+        )
         component_key = (
             component_info.key if component_info else placed_pad.parent_footprint
         )
@@ -680,7 +1210,6 @@ def _placed_pad_records(
             if component_info and component_info.part_name
             else footprint_name
         )
-        pad_definition = pad_definitions_by_key.get(placed_pad.pad)
         padstack_definition = (
             padstack_names_by_key.get(pad_definition.padstack)
             if pad_definition
@@ -689,8 +1218,16 @@ def _placed_pad_records(
         via_position = _padstack_via_position(
             padstack_definition,
             pad_definition,
-            center,
+            copper_center,
         )
+        center = via_position or copper_center
+        footprint_pad_rotation = _pad_local_rotation_for_footprint(
+            pad_definition, padstack
+        )
+        pad_rotation = (
+            component_info.rotation if component_info else 0.0
+        ) + footprint_pad_rotation
+        via_rotation = _pad_rotation_for_shape(pad_definition, padstack_definition)
         footprint_id = semantic_id("footprint", footprint_name)
         records.append(
             _PadRecord(
@@ -710,10 +1247,57 @@ def _placed_pad_records(
                 side=(component_info.side if component_info else None) or "top",
                 component_location=component_info.location if component_info else None,
                 component_rotation=component_info.rotation if component_info else None,
+                pad_rotation=pad_rotation,
+                footprint_pad_rotation=footprint_pad_rotation,
+                via_rotation=via_rotation,
                 via_position=via_position,
             )
         )
     return records
+
+
+def _pad_rotation_for_shape(
+    pad_definition: BRDPadDefinition | None,
+    padstack_name: str | None,
+) -> float:
+    if padstack_name and padstack_name.upper().startswith("POB"):
+        return 0.0
+    return radians(
+        float(pad_definition.rotation_mdeg if pad_definition else 0) / 1000.0
+    )
+
+
+def _pad_local_rotation_for_footprint(
+    pad_definition: BRDPadDefinition | None,
+    padstack: BRDPadstack | None,
+) -> float:
+    if padstack is not None and _pob_dimensions(padstack.name) is not None:
+        return 0.0
+    rotation_degrees = float(pad_definition.rotation_mdeg if pad_definition else 0)
+    rotation_degrees /= 1000.0
+    if _pad_shape_is_half_turn_symmetric(padstack):
+        rotation_degrees %= 180.0
+        if abs(rotation_degrees - 180.0) < 1e-9:
+            rotation_degrees = 0.0
+    return radians(rotation_degrees)
+
+
+def _pad_shape_is_half_turn_symmetric(padstack: BRDPadstack | None) -> bool:
+    if padstack is None:
+        return True
+    if _circle_name_diameter(padstack.name) is not None:
+        return True
+    component = _padstack_layer_component(padstack, 0, "pad")
+    if component is None or component.component_type == 0:
+        return True
+    return component.type_name.casefold() in {
+        "circle",
+        "square",
+        "rectangle",
+        "oblong_x",
+        "oblong_y",
+        "rounded_rectangle",
+    }
 
 
 def _placed_pad_has_logical_pin(placed_pad: BRDPlacedPad, pin_name: str) -> bool:
@@ -823,7 +1407,12 @@ def _component_pin_pad_records(
                     or str(record.pad.pad or ""),
                     geometry=SemanticPadGeometry(
                         shape_id=record.shape_id,
-                        source="brd_placed_pad_bbox",
+                        source="brd_padstack_component"
+                        if record.padstack_definition
+                        else "brd_placed_pad_bbox",
+                        rotation=record.pad_rotation,
+                        footprint_rotation=record.footprint_pad_rotation,
+                        via_rotation=record.via_rotation,
                         via_position=record.via_position.model_dump(mode="json")
                         if record.via_position is not None
                         else None,
@@ -1378,8 +1967,10 @@ def _instance_footprint_names(payload: BRDLayout) -> dict[int, str]:
 
 def _component_infos(
     payload: BRDLayout,
+    layer_names: list[str],
     top_layer: str | None,
     bottom_layer: str | None,
+    texts_by_key: dict[int, BRDText],
 ) -> dict[int, _ComponentInfo]:
     component_instances_by_key = {
         instance.key: instance for instance in payload.component_instances or []
@@ -1406,8 +1997,22 @@ def _component_infos(
             if component_instance and component_instance.refdes
             else f"BRD_{footprint_instance.key}"
         )
-        side = "bottom" if footprint_instance.layer != 0 else "top"
-        layer_name = bottom_layer if side == "bottom" else top_layer
+        text_layer = (
+            texts_by_key.get(footprint_instance.text).layer
+            if texts_by_key.get(footprint_instance.text) is not None
+            else None
+        )
+        layer_name = _component_layer_from_refdes_text(
+            text_layer,
+            layer_names,
+            top_layer,
+            bottom_layer,
+        )
+        if layer_name is None:
+            side = "bottom" if footprint_instance.layer != 0 else "top"
+            layer_name = bottom_layer if side == "bottom" else top_layer
+        else:
+            side = _component_side_from_layer(layer_name, top_layer, bottom_layer)
         result[footprint_instance.key] = _ComponentInfo(
             key=component_key,
             refdes=refdes,
@@ -1418,6 +2023,43 @@ def _component_infos(
             rotation=radians(_footprint_instance_rotation_degrees(footprint_instance)),
         )
     return result
+
+
+def _component_layer_from_refdes_text(
+    layer: object,
+    layer_names: list[str],
+    top_layer: str | None,
+    bottom_layer: str | None,
+) -> str | None:
+    if layer is None or getattr(layer, "class_code", None) != REF_DES_CLASS_CODE:
+        return None
+    subclass_code = getattr(layer, "subclass_code", None)
+    if subclass_code == REF_DES_TOP_SUBCLASS_CODE:
+        return top_layer
+    if subclass_code == REF_DES_BOTTOM_SUBCLASS_CODE:
+        return bottom_layer
+    if not isinstance(subclass_code, int):
+        return None
+    if subclass_code % 2 != 0:
+        return None
+    layer_index = subclass_code // 2 + 1
+    if 0 < layer_index < len(layer_names):
+        return layer_names[layer_index]
+    return None
+
+
+def _component_side_from_layer(
+    layer_name: str | None,
+    top_layer: str | None,
+    bottom_layer: str | None,
+) -> str | None:
+    if layer_name is None:
+        return None
+    if top_layer is not None and layer_name == top_layer:
+        return "top"
+    if bottom_layer is not None and layer_name == bottom_layer:
+        return "bottom"
+    return "internal"
 
 
 def _part_names_by_component_instance(
@@ -1499,7 +2141,7 @@ def _shape_id(
     *,
     kind: str,
     auroradb_type: str,
-    values: list[float | str],
+    values: list[float | int | str],
     source_path: str,
     source_key: object,
 ) -> str:
@@ -1521,7 +2163,7 @@ def _shape_id(
     return shape_id
 
 
-def _shape_key_value(value: float | str) -> object:
+def _shape_key_value(value: float | int | str) -> object:
     if isinstance(value, str):
         return value
     return round(float(value), 9)

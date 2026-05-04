@@ -1,8 +1,8 @@
 [package]
-name = "brd_parser"
-version = "0.1.6"
+name = "altium_parser"
+version = "0.1.0"
 edition = "2021"
-description = "Cadence Allegro binary BRD parser core, CLI, and Python extension used by Aurora Translator"
+description = "Altium Designer PCB parser core, CLI, and Python extension used by Aurora Translator"
 license = "MIT"
 
 [features]
@@ -10,7 +10,7 @@ default = []
 python = ["dep:pyo3", "dep:pythonize"]
 
 [lib]
-name = "aurora_brd_native"
+name = "aurora_altium_native"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]

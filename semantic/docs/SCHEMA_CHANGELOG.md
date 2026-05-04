@@ -8,6 +8,11 @@
 
 [English](#en) | [返回顶部](#top)
 
+## 0.7.2
+
+- `SourceRef.source_format` 和 `SemanticMetadata.source_format` 的枚举新增 `altium`，用于标记 Altium Designer `.PcbDoc` source JSON 产生的语义对象。
+- 没有新增、删除或重命名顶层字段；既有 `aedb`、`auroradb`、`odbpp`、`brd` 和 `alg` payload 结构保持兼容。
+
 ## 0.7.1
 
 - `SourceRef.source_format` 和 `SemanticMetadata.source_format` 的枚举新增 `alg`，用于标记 Cadence Allegro extracta ALG source JSON 产生的语义对象。
@@ -63,6 +68,11 @@
 ## English
 
 [中文](#zh) | [Back to top](#top)
+
+## 0.7.2
+
+- Added `altium` to the `SourceRef.source_format` and `SemanticMetadata.source_format` enums for semantic objects generated from Altium Designer `.PcbDoc` source JSON.
+- No top-level fields were added, removed, or renamed; existing `aedb`, `auroradb`, `odbpp`, `brd`, and `alg` payload structures remain compatible.
 
 ## 0.7.1
 

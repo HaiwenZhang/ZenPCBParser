@@ -29,11 +29,11 @@ def build_parser() -> argparse.ArgumentParser:
         ),
         epilog=(
             "Semantic-centered commands:\n"
-            "  main.py convert --from <aedb|auroradb|odbpp|brd|alg> --to <aaf|auroradb|odbpp> <input> -o <out>\n"
-            "  main.py inspect source --format <aedb|auroradb|odbpp|brd|alg> <input>\n"
-            "  main.py dump source-json --format <aedb|auroradb|odbpp|brd|alg> <input> -o <file>\n"
-            "  main.py dump semantic-json --from <aedb|auroradb|odbpp|brd|alg> <input> -o <file>\n"
-            "  main.py schema --format <aedb|auroradb|odbpp|brd|alg|semantic>\n"
+            "  main.py convert --from <aedb|auroradb|odbpp|brd|alg|altium> --to <aaf|auroradb|odbpp> <input> -o <out>\n"
+            "  main.py inspect source --format <aedb|auroradb|odbpp|brd|alg|altium> <input>\n"
+            "  main.py dump source-json --format <aedb|auroradb|odbpp|brd|alg|altium> <input> -o <file>\n"
+            "  main.py dump semantic-json --from <aedb|auroradb|odbpp|brd|alg|altium> <input> -o <file>\n"
+            "  main.py schema --format <aedb|auroradb|odbpp|brd|alg|altium|semantic>\n"
             "Compatibility commands remain available under: auroradb, odbpp, semantic."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,

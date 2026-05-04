@@ -146,6 +146,23 @@ pub struct Padstack {
     pub drill_size_raw: Option<u32>,
     pub fixed_component_count: usize,
     pub components_per_layer: usize,
+    pub components: Vec<PadstackComponent>,
+}
+
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct PadstackComponent {
+    pub slot_index: usize,
+    pub layer_index: Option<usize>,
+    pub role: String,
+    pub component_type: u8,
+    pub type_name: String,
+    pub width_raw: i32,
+    pub height_raw: i32,
+    pub z1_raw: Option<i32>,
+    pub x_offset_raw: i32,
+    pub y_offset_raw: i32,
+    pub shape_key: u32,
+    pub z2_raw: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Default)]
