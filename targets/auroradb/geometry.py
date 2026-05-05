@@ -226,7 +226,9 @@ def _component_command(
 
     x, y = _point_coordinates(component.location, source_unit=source_unit)
     rotation = _format_rotation(
-        placement.rotation if placement is not None else component.rotation,
+        _component_rotation_for_export(
+            component, placement=placement, source_format=source_format
+        ),
         source_format=source_format,
     )
     flip_x, flip_y = _component_flip_flags(
@@ -1128,7 +1130,7 @@ def _pad_via_position(pad: SemanticPad) -> SemanticPoint | None:
 
 def _format_geometry_shape_values(
     geometry_type: str,
-    values: list[str | float | int],
+    values: list[Any],
     *,
     source_unit: str | None,
 ) -> list[str]:
@@ -1154,13 +1156,13 @@ def _frontend_rounded_rectangle_values(values: list[str]) -> list[str]:
 
 
 def _format_polygon_shape_values(
-    values: list[str | float | int], *, source_unit: str | None
+    values: list[Any], *, source_unit: str | None
 ) -> list[str]:
     if len(values) < 4:
         return [_format_shape_value(value, source_unit=source_unit) for value in values]
     result = [_format_scalar(values[0])]
     coordinate_values = values[1:]
-    tail: list[str | float | int] = []
+    tail: list[Any] = []
     if len(coordinate_values) >= 2 and all(
         str(value).upper() in {"Y", "N"} for value in coordinate_values[-2:]
     ):
@@ -1174,9 +1176,21 @@ def _format_polygon_shape_values(
     return result
 
 
-def _format_polygon_shape_vertex(
-    value: str | float | int, *, source_unit: str | None
-) -> str:
+def _format_polygon_shape_vertex(value: Any, *, source_unit: str | None) -> str:
+    if isinstance(value, dict):
+        point = _point_tuple(value, source_unit=source_unit)
+        if point is not None:
+            return f"({_format_number(point[0])},{_format_number(point[1])})"
+    if isinstance(value, (list, tuple)) and len(value) in {2, 5}:
+        numeric_count = 4 if len(value) == 5 else 2
+        formatted = [
+            _format_shape_value(part, source_unit=source_unit)
+            for part in value[:numeric_count]
+        ]
+        if len(value) == 5:
+            flag = value[4]
+            formatted.append(_bool_aaf(flag) if isinstance(flag, bool) else str(flag))
+        return f"({','.join(formatted)})"
     if (
         not isinstance(value, str)
         or not value.startswith("(")
@@ -1314,8 +1328,26 @@ def _component_flip_flags(
     if placement is not None:
         return placement.flip_x, placement.flip_y
     if _odbpp_component_needs_bottom_flip(component, source_format=source_format):
-        return True, False
+        return False, True
     return False, False
+
+
+def _component_rotation_for_export(
+    component: SemanticComponent,
+    *,
+    placement: _AedbComponentPlacement | None = None,
+    source_format: str | None = None,
+) -> Any:
+    rotation = placement.rotation if placement is not None else component.rotation
+    if (
+        placement is None
+        and _source_rotations_are_clockwise(source_format)
+        and component.side == "bottom"
+    ):
+        number = _number(rotation)
+        if number is not None and _is_finite(number):
+            return -number
+    return rotation
 
 
 def _odbpp_component_needs_bottom_flip(

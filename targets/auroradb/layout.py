@@ -14,10 +14,12 @@ from aurora_translator.targets.auroradb.direct import (
     _TraceShape,
 )
 from aurora_translator.targets.auroradb.formatting import (
+    _auroradb_output_unit,
     _format_number,
     _format_rotation,
     _length_to_mil,
     _point_tuple,
+    _source_unit_for_auroradb_output,
     _truthy,
 )
 from aurora_translator.targets.auroradb.geometry import (
@@ -36,6 +38,7 @@ from aurora_translator.targets.auroradb.geometry import (
     _component_name,
     _component_pad_net_vias,
     _component_part_name,
+    _component_rotation_for_export,
     _direct_location_values,
     _net_via_key,
     _net_pin_command,
@@ -85,23 +88,11 @@ _DEFAULT_SOURCE_UNIT = object()
 
 
 def _layout_unit(board: SemanticBoard) -> str:
-    return "mm" if _preserve_board_units(board) else "mil"
+    return _auroradb_output_unit(board.units)
 
 
 def _geometry_source_unit(board: SemanticBoard) -> str | None:
-    return None if _preserve_board_units(board) else board.units
-
-
-def _preserve_board_units(board: SemanticBoard) -> bool:
-    source_format = (board.metadata.source_format or "").casefold()
-    unit = (board.units or "").casefold()
-    return source_format in {"alg", "auroradb", "brd", "odbpp"} and unit in {
-        "mm",
-        "millimeter",
-        "millimeters",
-        "millimetre",
-        "millimetres",
-    }
+    return _source_unit_for_auroradb_output(board.units)
 
 
 def _resolved_source_unit(
@@ -118,6 +109,7 @@ def _build_direct_layout_package(
 ) -> _DirectLayoutBuilder:
     builder = _DirectLayoutBuilder()
     geometry_source_unit = _geometry_source_unit(board)
+    builder.units = _layout_unit(board)
     layer_name_map = _metal_layer_name_map(metal_layers, board.layers)
     shape_ids = _aaf_shape_ids(board.shapes)
     trace_shape_ids = _aaf_trace_shape_ids(
@@ -409,7 +401,9 @@ def _direct_add_component(
         builder.add_component_layer(component_layer_name, metal_layer)
         layer = builder.find_layer_by_component_layer(component_layer_name)
     rotation = _format_rotation(
-        placement.rotation if placement is not None else component.rotation,
+        _component_rotation_for_export(
+            component, placement=placement, source_format=source_format
+        ),
         source_format=source_format,
     )
     flip_x, flip_y = _component_flip_flags(
@@ -795,7 +789,7 @@ def _design_layout_lines(
     pad_shape_ids = _pad_shape_ids_by_definition(board)
 
     layerstack = ",".join(
-        f"({layer.name},signal,{_format_number(layer.thickness_mil)})"
+        f"({layer.name},signal,{_format_number(layer.thickness)})"
         for layer in metal_layers
     )
     lines.append(f"layout set -layerstack <{layerstack}>")

@@ -1,6 +1,6 @@
 [package]
 name = "altium_parser"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "Altium Designer PCB parser core, CLI, and Python extension used by Aurora Translator"
 license = "MIT"

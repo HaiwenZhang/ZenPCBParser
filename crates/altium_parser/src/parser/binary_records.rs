@@ -224,7 +224,10 @@ pub(crate) fn parse_via_record(
             if reader.remaining_subrecord_bytes() < 4 {
                 break;
             }
-            diameter_by_layer.push(coord_to_mil_i32(reader.i32()?));
+            // Vias6 stores per-layer diameters as 8.8 fixed-point values on
+            // top of Altium's regular internal coordinate scale. The scalar
+            // via diameter fields above use only the internal coordinate scale.
+            diameter_by_layer.push(coord_to_mil_i32(reader.i32()?) / 256.0);
         }
     }
     reader.skip_subrecord()?;

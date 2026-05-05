@@ -39,7 +39,7 @@ class AltiumSemanticAdapterTests(unittest.TestCase):
                     "parsed_stream_count": 8,
                     "layer_count": 2,
                     "net_count": 1,
-                    "class_count": 0,
+                    "class_count": 1,
                     "rule_count": 0,
                     "polygon_count": 0,
                     "component_count": 1,
@@ -49,7 +49,7 @@ class AltiumSemanticAdapterTests(unittest.TestCase):
                     "arc_count": 0,
                     "fill_count": 0,
                     "region_count": 0,
-                    "text_count": 0,
+                    "text_count": 1,
                     "board_outline_vertex_count": 4,
                     "diagnostic_count": 0,
                     "units": "mil",
@@ -144,7 +144,16 @@ class AltiumSemanticAdapterTests(unittest.TestCase):
                     },
                 ],
                 "nets": [{"index": 0, "name": "GND", "properties": {}}],
-                "classes": [],
+                "classes": [
+                    {
+                        "index": 0,
+                        "name": "Inside Board Components",
+                        "unique_id": None,
+                        "kind": 4,
+                        "members": ["U1", "LOGO1"],
+                        "properties": {},
+                    }
+                ],
                 "rules": [],
                 "polygons": [],
                 "components": [
@@ -162,15 +171,38 @@ class AltiumSemanticAdapterTests(unittest.TestCase):
                         "locked": False,
                         "name_on": True,
                         "comment_on": True,
-                        "source_designator": "U1",
+                        "source_designator": None,
                         "source_unique_id": "ABC",
                         "source_hierarchical_path": None,
                         "source_footprint_library": "lib.PcbLib",
                         "pattern": "QFN",
                         "source_component_library": None,
-                        "source_lib_reference": "MCU",
+                        "source_lib_reference": None,
                         "properties": {},
-                    }
+                    },
+                    {
+                        "index": 1,
+                        "layer_id": 1,
+                        "layer_name": "TopLayer",
+                        "position": {
+                            "x_raw": 30000,
+                            "y_raw": -40000,
+                            "x": 3.0,
+                            "y": 4.0,
+                        },
+                        "rotation": 0.0,
+                        "locked": False,
+                        "name_on": True,
+                        "comment_on": True,
+                        "source_designator": "LOGO1",
+                        "source_unique_id": "LOGO",
+                        "source_hierarchical_path": None,
+                        "source_footprint_library": "lib.PcbLib",
+                        "pattern": "LOGO",
+                        "source_component_library": None,
+                        "source_lib_reference": "LOGO",
+                        "properties": {},
+                    },
                 ],
                 "pads": [
                     {
@@ -276,7 +308,26 @@ class AltiumSemanticAdapterTests(unittest.TestCase):
                 "arcs": [],
                 "fills": [],
                 "regions": [],
-                "texts": [],
+                "texts": [
+                    {
+                        "index": 0,
+                        "layer_id": 1,
+                        "layer_name": "TopLayer",
+                        "component": 0,
+                        "position": point,
+                        "height": 1.0,
+                        "rotation": 0.0,
+                        "stroke_width": 0.1,
+                        "font_type": "stroke",
+                        "font_name": None,
+                        "text": "MCU",
+                        "is_bold": False,
+                        "is_italic": False,
+                        "is_mirrored": False,
+                        "is_comment": True,
+                        "is_designator": False,
+                    }
+                ],
                 "streams": [],
                 "stream_counts": {},
                 "diagnostics": [],
@@ -297,10 +348,169 @@ class AltiumSemanticAdapterTests(unittest.TestCase):
         self.assertEqual(board.summary.via_count, 1)
         self.assertEqual(board.summary.primitive_count, 1)
         self.assertEqual(board.components[0].refdes, "U1")
+        self.assertEqual(board.components[0].part_name, "MCU")
         self.assertEqual(board.pads[0].net_id, board.nets[0].id)
         self.assertEqual(board.vias[0].template_id, board.via_templates[0].id)
         self.assertEqual(board.primitives[0].kind, "trace")
         self.assertEqual(board.board_outline.kind, "polygon")
+        self.assertEqual(
+            board.board_outline.values,
+            [4, "(0,0)", "(10,0)", "(10,-5)", "(0,-5)", "Y", "Y"],
+        )
+
+    def test_altium_adapter_normalizes_outline_points(self) -> None:
+        from aurora_translator.semantic.adapters.altium import _vertex_points
+        from aurora_translator.sources.altium.models import AltiumVertex
+
+        vertices = [
+            AltiumVertex.model_validate(
+                {
+                    "is_round": False,
+                    "radius": 0.0,
+                    "start_angle": 0.0,
+                    "end_angle": 0.0,
+                    "position": {
+                        "x_raw": 10000,
+                        "y_raw": 20000,
+                        "x": 1.0,
+                        "y": -2.0,
+                    },
+                }
+            ),
+            AltiumVertex.model_validate(
+                {
+                    "is_round": False,
+                    "radius": 0.0,
+                    "start_angle": 0.0,
+                    "end_angle": 0.0,
+                    "position": {
+                        "x_raw": 2147483647,
+                        "y_raw": 2147483647,
+                        "x": 214748.3647,
+                        "y": -214748.3647,
+                    },
+                }
+            ),
+        ]
+
+        self.assertEqual(_vertex_points(vertices), [[1.0, 2.0]])
+
+    def test_altium_adapter_normalizes_legacy_via_layer_diameters(self) -> None:
+        from aurora_translator.semantic.adapters.altium import (
+            _via_layer_diameter,
+            _via_template_key,
+        )
+        from aurora_translator.sources.altium.models import AltiumVia
+
+        via = AltiumVia.model_validate(
+            {
+                "index": 0,
+                "net": 0,
+                "position": {
+                    "x_raw": 10000,
+                    "y_raw": 20000,
+                    "x": 1.0,
+                    "y": 2.0,
+                },
+                "diameter": 18.0,
+                "hole_size": 10.0,
+                "start_layer_id": 1,
+                "start_layer_name": "TOP",
+                "end_layer_id": 32,
+                "end_layer_name": "BOTTOM",
+                "via_mode": "full",
+                "diameter_by_layer": [4608.0, 5120.0, 20.0],
+                "is_locked": False,
+                "is_tent_top": False,
+                "is_tent_bottom": False,
+            }
+        )
+
+        self.assertEqual(_via_layer_diameter(via, 0, 18.0), 18.0)
+        self.assertEqual(_via_layer_diameter(via, 1, 18.0), 20.0)
+        self.assertEqual(_via_layer_diameter(via, 2, 18.0), 20.0)
+        self.assertEqual(_via_template_key(via)[5], (18.0, 20.0, 20.0))
+
+    def test_altium_adapter_uses_board_stackup_chain_for_copper_layers(self) -> None:
+        from aurora_translator.semantic.adapters.altium import from_altium
+        from aurora_translator.sources.altium.models import AltiumLayout
+
+        def layer(
+            layer_id: int,
+            name: str,
+            *,
+            next_id: int | None = None,
+            prev_id: int | None = None,
+        ) -> dict[str, object]:
+            return {
+                "layer_id": layer_id,
+                "name": name,
+                "next_id": next_id,
+                "prev_id": prev_id,
+                "copper_thickness": 1.4,
+                "dielectric_constant": None,
+                "dielectric_thickness": None,
+                "dielectric_material": None,
+                "mechanical_enabled": False,
+                "mechanical_kind": None,
+            }
+
+        payload = AltiumLayout.model_validate(
+            {
+                "metadata": {
+                    "project_version": "1.0.44",
+                    "parser_version": "0.1.0",
+                    "output_schema_version": "0.1.0",
+                    "source": "sample.PcbDoc",
+                    "source_type": "file",
+                    "backend": "rust-cli",
+                    "rust_parser_version": "0.1.0",
+                },
+                "summary": {
+                    "stream_count": 1,
+                    "parsed_stream_count": 1,
+                    "layer_count": 6,
+                    "net_count": 0,
+                    "class_count": 0,
+                    "rule_count": 0,
+                    "polygon_count": 0,
+                    "component_count": 0,
+                    "pad_count": 0,
+                    "via_count": 0,
+                    "track_count": 0,
+                    "arc_count": 0,
+                    "fill_count": 0,
+                    "region_count": 0,
+                    "text_count": 0,
+                    "board_outline_vertex_count": 0,
+                    "diagnostic_count": 0,
+                    "units": "mil",
+                    "format": "altium-pcbdoc",
+                },
+                "board": {"layer_count_declared": 5, "outline": [], "properties": {}},
+                "layers": [
+                    layer(1, "Top", next_id=39),
+                    layer(2, "Inner1", next_id=40, prev_id=39),
+                    layer(3, "UnusedMid"),
+                    layer(32, "Bottom", prev_id=40),
+                    layer(39, "GND02", next_id=2, prev_id=1),
+                    layer(40, "PWR05", next_id=32, prev_id=2),
+                ],
+                "stream_counts": {},
+                "diagnostics": [],
+            }
+        )
+
+        board = from_altium(payload)
+
+        self.assertEqual(
+            [layer.name for layer in board.layers],
+            ["Top", "GND02", "Inner1", "PWR05", "Bottom"],
+        )
+        self.assertEqual(
+            [layer.role for layer in board.layers],
+            ["signal", "plane", "signal", "plane", "signal"],
+        )
 
 
 if __name__ == "__main__":

@@ -52,6 +52,8 @@ _VIA_PAD_MATCH_TOLERANCE = 1e-3
 
 def from_odbpp(payload: ODBLayout) -> SemanticBoard:
     layer_names_by_key = _matrix_layer_names_by_key(payload)
+    drill_layer_keys = _matrix_drill_layer_keys(payload)
+    side_metal_layer_names = _side_metal_layer_names(payload)
     drill_layer_spans = _drill_layer_spans(payload, layer_names_by_key)
     materials, layers = _semantic_stackup(payload)
     nets_by_id, _net_ids_by_name, feature_net_ids, pin_net_ids, feature_pin_keys = (
@@ -78,10 +80,12 @@ def from_odbpp(payload: ODBLayout) -> SemanticBoard:
         canonical_layer_name = _canonical_layer_name(
             layer.layer_name, layer_names_by_key
         )
+        layer_key = _layer_key(layer.layer_name)
+        is_drill_feature_layer = layer_key in drill_layer_keys or _is_drill_layer(
+            layer.layer_name
+        )
         for feature_index, feature in enumerate(layer.features):
-            net_id = feature_net_ids.get(
-                (_layer_key(layer.layer_name), feature.feature_index)
-            )
+            net_id = feature_net_ids.get((layer_key, feature.feature_index))
             symbol_name = _feature_symbol_name(layer, feature)
             shape_id = _shape_id_from_symbol(
                 symbol_name,
@@ -106,14 +110,13 @@ def from_odbpp(payload: ODBLayout) -> SemanticBoard:
                 for primitive in feature_primitives:
                     nets_by_id[net_id].primitive_ids.append(primitive.id)
 
-            if (
-                feature.kind == "P"
-                and feature.start is not None
-                and net_id
-                and shape_id
-            ):
-                if _is_drill_layer(layer.layer_name):
-                    layer_span = drill_layer_spans.get(_layer_key(layer.layer_name), [])
+            if feature.kind == "P" and feature.start is not None and shape_id:
+                if is_drill_feature_layer:
+                    via_net_id = net_id or _ensure_odbpp_no_net(
+                        nets_by_id,
+                        source_path="semantic.no_net_drill_features",
+                    )
+                    layer_span = drill_layer_spans.get(layer_key, [])
                     tool_info = _drill_tool_info(
                         layer.layer_name,
                         symbol_name,
@@ -136,7 +139,7 @@ def from_odbpp(payload: ODBLayout) -> SemanticBoard:
                         ),
                         name=feature.feature_id,
                         template_id=template_id,
-                        net_id=net_id,
+                        net_id=via_net_id,
                         layer_names=layer_span,
                         position=point_from_pair(feature.start),
                         geometry={
@@ -152,8 +155,8 @@ def from_odbpp(payload: ODBLayout) -> SemanticBoard:
                         ),
                     )
                     vias.append(via)
-                    nets_by_id[net_id].via_ids.append(via.id)
-                else:
+                    nets_by_id[via_net_id].via_ids.append(via.id)
+                elif net_id:
                     orientation = _feature_orientation(feature, symbol_name)
                     pad_info = {
                         "feature_key": (
@@ -208,9 +211,8 @@ def from_odbpp(payload: ODBLayout) -> SemanticBoard:
                 feature.kind == "L"
                 and feature.start is not None
                 and feature.end is not None
-                and net_id
             ):
-                if _is_drill_layer(layer.layer_name):
+                if is_drill_feature_layer:
                     slot_shape_id, slot_geometry = _shape_id_from_drill_slot(
                         symbol_name,
                         feature,
@@ -219,9 +221,11 @@ def from_odbpp(payload: ODBLayout) -> SemanticBoard:
                         source_path=f"layers[{layer_index}].features[{feature_index}]",
                     )
                     if slot_shape_id is not None and slot_geometry is not None:
-                        layer_span = drill_layer_spans.get(
-                            _layer_key(layer.layer_name), []
+                        via_net_id = net_id or _ensure_odbpp_no_net(
+                            nets_by_id,
+                            source_path="semantic.no_net_drill_features",
                         )
+                        layer_span = drill_layer_spans.get(layer_key, [])
                         tool_info = _drill_tool_info(
                             layer.layer_name,
                             symbol_name,
@@ -247,7 +251,7 @@ def from_odbpp(payload: ODBLayout) -> SemanticBoard:
                             ),
                             name=feature.feature_id,
                             template_id=template_id,
-                            net_id=net_id,
+                            net_id=via_net_id,
                             layer_names=layer_span,
                             position=slot_geometry["center"],
                             geometry={
@@ -270,13 +274,14 @@ def from_odbpp(payload: ODBLayout) -> SemanticBoard:
                             ),
                         )
                         vias.append(via)
-                        nets_by_id[net_id].via_ids.append(via.id)
+                        nets_by_id[via_net_id].via_ids.append(via.id)
 
     _promote_no_net_routable_primitives(nets_by_id, primitives, layers)
 
     components, footprints_by_id, pins = _semantic_components(
         payload,
         layer_names_by_key=layer_names_by_key,
+        side_metal_layer_names=side_metal_layer_names,
         pin_net_ids=pin_net_ids,
         pad_features_by_pin_key=pad_features_by_pin_key,
         nets_by_id=nets_by_id,
@@ -351,7 +356,7 @@ def _semantic_stackup(
             continue
         attrs = layer_attributes_by_key.get(_layer_key(row.name), {})
         role = role_from_layer_type(
-            row.layer_type, is_via_layer=_is_drill_layer(row.name)
+            row.layer_type, is_via_layer=_is_matrix_drill_row(row)
         )
         material_name = (
             _odbpp_layer_material_name(row.name, role)
@@ -531,7 +536,22 @@ def _semantic_nets(
 
 
 def _is_no_net_name(name: str | None) -> bool:
-    return (name or "").strip().casefold() in _ODBPP_NO_NET_ALIASES
+    text = (name or "").strip().casefold()
+    return text in _ODBPP_NO_NET_ALIASES or text.startswith("$none$;")
+
+
+def _ensure_odbpp_no_net(
+    nets_by_id: dict[str, SemanticNet], *, source_path: str
+) -> str:
+    no_net_id = semantic_id("net", ODBPP_NO_NET_NAME)
+    if no_net_id not in nets_by_id:
+        nets_by_id[no_net_id] = SemanticNet(
+            id=no_net_id,
+            name=ODBPP_NO_NET_NAME,
+            role="no_net",
+            source=source_ref("odbpp", source_path, ODBPP_NO_NET_NAME),
+        )
+    return no_net_id
 
 
 def _promote_no_net_routable_primitives(
@@ -549,15 +569,11 @@ def _promote_no_net_routable_primitives(
         if not _should_promote_to_no_net(primitive, layer_roles):
             continue
         if no_net is None:
-            no_net = SemanticNet(
-                id=no_net_id,
-                name=ODBPP_NO_NET_NAME,
-                role="no_net",
-                source=source_ref(
-                    "odbpp", "semantic.no_net_routable_primitives", ODBPP_NO_NET_NAME
-                ),
+            no_net_id = _ensure_odbpp_no_net(
+                nets_by_id,
+                source_path="semantic.no_net_routable_primitives",
             )
-            nets_by_id[no_net_id] = no_net
+            no_net = nets_by_id[no_net_id]
         primitive.net_id = no_net_id
         no_net.primitive_ids.append(primitive.id)
 
@@ -583,6 +599,7 @@ def _semantic_components(
     payload: ODBLayout,
     *,
     layer_names_by_key: dict[str, str],
+    side_metal_layer_names: dict[str, str],
     pin_net_ids: dict[tuple[str, int, int], str],
     pad_features_by_pin_key: dict[tuple[str, int, int], list[dict[str, Any]]],
     nets_by_id: dict[str, SemanticNet],
@@ -593,24 +610,48 @@ def _semantic_components(
     components: list[SemanticComponent] = []
     footprints_by_id: dict[str, SemanticFootprint] = {}
     pins: list[SemanticPin] = []
+    units = _selected_units(payload)
     packages_by_index = {
         package.package_index: package
         for package in payload.packages or []
         if package.package_index is not None
     }
+    package_names = {
+        name
+        for package in payload.packages or []
+        for name in [_package_name(package)]
+        if name
+    }
+    package_records: list[tuple[int, Any, str, str]] = []
+    package_names_by_index: dict[int, str] = {}
     for package_index, package in enumerate(payload.packages or []):
-        footprint_name = _package_name(package) or (
+        raw_footprint_name = _package_name(package) or (
             f"pkg_{package.package_index}"
             if package.package_index is not None
             else f"pkg_source_{package_index}"
         )
+        footprint_name = _canonical_odbpp_package_name(
+            raw_footprint_name, package_names
+        )
+        package_records.append(
+            (package_index, package, raw_footprint_name, footprint_name)
+        )
+        if package.package_index is not None:
+            package_names_by_index[package.package_index] = footprint_name
+
+    for (
+        package_index,
+        package,
+        raw_footprint_name,
+        footprint_name,
+    ) in _representative_package_records(package_records):
         footprint_id = semantic_id("footprint", footprint_name)
         if footprint_id in footprints_by_id:
             continue
         footprints_by_id[footprint_id] = SemanticFootprint(
             id=footprint_id,
             name=footprint_name,
-            attributes=dict(package.properties),
+            attributes=_package_attributes(package, raw_footprint_name, footprint_name),
             geometry=_footprint_geometry_from_package(package),
             source=source_ref(
                 "odbpp",
@@ -622,14 +663,27 @@ def _semantic_components(
     for index, component in enumerate(payload.components or []):
         package = packages_by_index.get(component.package_index)
         footprint_id = None
-        footprint_name = (
+        raw_footprint_name = (
             component.package_name
+            or (
+                package_names_by_index.get(component.package_index)
+                if component.package_index is not None
+                else None
+            )
             or _package_name(package)
             or (
                 f"pkg_{component.package_index}"
                 if component.package_index is not None
                 else None
             )
+        )
+        footprint_name = (
+            _canonical_odbpp_package_name(raw_footprint_name, package_names)
+            if raw_footprint_name
+            else None
+        )
+        component_part_name = _normalize_odbpp_part_name(
+            component.part_name or component.package_name
         )
         if footprint_name:
             footprint_id = semantic_id("footprint", footprint_name)
@@ -638,19 +692,25 @@ def _semantic_components(
                 footprints_by_id[footprint_id] = SemanticFootprint(
                     id=footprint_id,
                     name=footprint_name,
-                    part_name=component.part_name,
-                    attributes=dict(package.properties) if package is not None else {},
+                    part_name=component_part_name,
+                    attributes=_package_attributes(
+                        package, raw_footprint_name, footprint_name
+                    )
+                    if package is not None
+                    else {},
                     geometry=footprint_geometry,
                     source=source_ref(
                         "odbpp", f"components[{index}].package_name", footprint_name
                     ),
                 )
             elif (
-                component.part_name and footprints_by_id[footprint_id].part_name is None
+                component_part_name and footprints_by_id[footprint_id].part_name is None
             ):
-                footprints_by_id[footprint_id].part_name = component.part_name
+                footprints_by_id[footprint_id].part_name = component_part_name
             if package is not None and not footprints_by_id[footprint_id].attributes:
-                footprints_by_id[footprint_id].attributes = dict(package.properties)
+                footprints_by_id[footprint_id].attributes = _package_attributes(
+                    package, raw_footprint_name, footprint_name
+                )
             if footprint_geometry and not footprints_by_id[footprint_id].geometry:
                 footprints_by_id[footprint_id].geometry = footprint_geometry
 
@@ -661,6 +721,8 @@ def _semantic_components(
         has_unresolved_pin_pad_layer = False
         component_id = semantic_id("component", component.refdes, index)
         for pin_index, pin in enumerate(component.pins):
+            pin_name = _component_pin_name(package, pin)
+            pin_label = pin_name or pin.pin_index
             side_key = side or ""
             net_id = None
             if component.component_index is not None and pin.pin_index is not None:
@@ -677,7 +739,7 @@ def _semantic_components(
                 )
             pin_id = semantic_id(
                 "pin",
-                f"{component.refdes or index}:{pin.name or pin.pin_index}",
+                f"{component.refdes or index}:{pin_label}",
                 f"{index}_{pin_index}",
             )
             pin_pad_ids: list[str] = []
@@ -699,6 +761,7 @@ def _semantic_components(
                     component_index=index,
                     pin_index=pin_index,
                     layer_names_by_key=layer_names_by_key,
+                    side_metal_layer_names=side_metal_layer_names,
                 )
             if net_id is None:
                 net_id = next(
@@ -716,7 +779,7 @@ def _semantic_components(
                 pad_net_id = pad_info.get("net_id") or net_id
                 pad_id = semantic_id(
                     "pad",
-                    f"{component.refdes or index}:{pin.name or pin.pin_index}:{pad_info['feature_key']}",
+                    f"{component.refdes or index}:{pin_label}:{pad_info['feature_key']}",
                     f"{index}_{pin_index}_{pad_info_index}",
                 )
                 pin_pad_ids.append(pad_id)
@@ -728,7 +791,7 @@ def _semantic_components(
                 pads.append(
                     SemanticPad(
                         id=pad_id,
-                        name=pin.name or pad_info.get("name"),
+                        name=pin_name or pad_info.get("name"),
                         footprint_id=footprint_id,
                         component_id=component_id,
                         pin_id=pin_id,
@@ -746,18 +809,21 @@ def _semantic_components(
             pins.append(
                 SemanticPin(
                     id=pin_id,
-                    name=pin.name
-                    or (str(pin.pin_index) if pin.pin_index is not None else None),
+                    name=pin_name,
                     component_id=component_id,
                     net_id=net_id,
                     pad_ids=pin_pad_ids,
                     layer_name=pin_layer_name
-                    or _side_pin_layer_name(side, layer_names_by_key),
+                    or _side_pin_layer_name(
+                        side,
+                        layer_names_by_key,
+                        side_metal_layer_names,
+                    ),
                     position=point_from_pair(pin.position),
                     source=source_ref(
                         "odbpp",
                         f"components[{index}].pins[{pin_index}]",
-                        pin.name or pin.pin_index,
+                        pin_label,
                     ),
                 )
             )
@@ -771,13 +837,13 @@ def _semantic_components(
                 id=component_id,
                 refdes=component.refdes,
                 name=component.refdes,
-                part_name=component.part_name or component.package_name,
+                part_name=component_part_name,
                 package_name=footprint_name,
                 footprint_id=footprint_id,
                 layer_name=component_layer_name or component.layer_name,
                 side=side,
                 value=component.properties.get("VALUE"),
-                location=point_from_pair(component.location),
+                location=_component_location(component, units),
                 rotation=_degrees_to_radians(component.rotation),
                 attributes=_component_attributes(component, package),
                 pin_ids=pin_ids,
@@ -794,10 +860,14 @@ def _semantic_components(
 
 
 def _side_pin_layer_name(
-    side: str | None, layer_names_by_key: dict[str, str]
+    side: str | None,
+    layer_names_by_key: dict[str, str],
+    side_metal_layer_names: dict[str, str],
 ) -> str | None:
     if side not in {"top", "bottom"}:
         return None
+    if side in side_metal_layer_names:
+        return side_metal_layer_names[side]
     return _canonical_layer_name(
         "TOP" if side == "top" else "BOTTOM", layer_names_by_key
     )
@@ -873,6 +943,78 @@ def _package_name(package: Any | None) -> str | None:
     if package is None:
         return None
     return package.properties.get("PACKAGE_NAME") or package.name
+
+
+def _component_pin_name(package: Any | None, pin: Any) -> str | None:
+    package_pin = _package_pin_for_component_pin(package, pin) if package else None
+    if (
+        package_pin is not None
+        and package_pin.name not in {None, ""}
+        and not _is_empty_package_pin_name(package_pin.name)
+    ):
+        return str(package_pin.name)
+    if pin.name not in {None, ""}:
+        return str(pin.name)
+    if pin.pin_index is not None:
+        return str(pin.pin_index)
+    return None
+
+
+def _canonical_odbpp_package_name(
+    name: str | None, package_names: set[str]
+) -> str | None:
+    if name is None:
+        return None
+    candidate = name.strip()
+    if not candidate:
+        return None
+    names_by_key = {item.casefold(): item for item in package_names if item}
+    tokens = candidate.split("_")
+    for suffix_count in range(len(tokens) - 1, 0, -1):
+        suffix = tokens[-suffix_count:]
+        if suffix[0] != "1" or not all(item.isdigit() for item in suffix):
+            continue
+        base = "_".join(tokens[:-suffix_count])
+        canonical = names_by_key.get(base.casefold())
+        if canonical is not None:
+            return canonical
+    return candidate
+
+
+def _representative_package_records(
+    package_records: list[tuple[int, Any, str, str]],
+) -> list[tuple[int, Any, str, str]]:
+    records_by_key: dict[str, tuple[int, Any, str, str]] = {}
+    for record in package_records:
+        _source_index, _package, raw_name, canonical_name = record
+        key = canonical_name.casefold()
+        existing = records_by_key.get(key)
+        if existing is None:
+            records_by_key[key] = record
+            continue
+        existing_raw_name = existing[2]
+        if raw_name.casefold() == key and existing_raw_name.casefold() != key:
+            records_by_key[key] = record
+    return sorted(records_by_key.values(), key=lambda item: item[0])
+
+
+def _normalize_odbpp_part_name(value: str | None) -> str | None:
+    if value is None:
+        return None
+    name = value.strip()
+    if not name:
+        return None
+    name = re.sub(r"(\d+\.\d+)_M(M?)(?=(_|$))", r"\1 M\2", name)
+    return name.replace("T_POINT_R_", "T POINT R_")
+
+
+def _package_attributes(
+    package: Any | None, raw_name: str | None, canonical_name: str | None
+) -> dict[str, str]:
+    attributes = dict(package.properties) if package is not None else {}
+    if raw_name and canonical_name and raw_name.casefold() != canonical_name.casefold():
+        attributes.setdefault("ODBPP_SOURCE_PACKAGE_NAME", raw_name)
+    return attributes
 
 
 def _component_attributes(component: Any, package: Any | None) -> dict[str, str]:
@@ -1122,13 +1264,11 @@ def _candidate_pad_match(
         if not shape_id:
             continue
         shape = shapes_by_id.get(str(shape_id))
-        score = (distance_sq, 0 if candidate.component_id else 1, index)
+        score = (distance_sq, 0 if not candidate.component_id else 1, index)
         match = {
             "shape_id": str(shape_id),
-            "rotation": _relative_rotation(
-                candidate.geometry.get("rotation"),
-                via_rotation,
-                half_turn_symmetric=_shape_is_half_turn_symmetric(shape),
+            "rotation": _matched_pad_rotation(
+                candidate.geometry.get("rotation"), via_rotation, shape
             ),
             "component_id": candidate.component_id,
             "distance": math.sqrt(distance_sq),
@@ -1152,10 +1292,8 @@ def _candidate_primitive_match(
         score = (distance_sq, index)
         match = {
             "shape_id": str(shape_id),
-            "rotation": _relative_rotation(
-                candidate.geometry.get("rotation"),
-                via_rotation,
-                half_turn_symmetric=_shape_is_half_turn_symmetric(shape),
+            "rotation": _matched_pad_rotation(
+                candidate.geometry.get("rotation"), via_rotation, shape
             ),
             "distance": math.sqrt(distance_sq),
         }
@@ -1212,6 +1350,37 @@ def _relative_rotation(
     if half_turn_symmetric:
         return _normalize_symmetric_radians(relative)
     return _normalize_radians(relative)
+
+
+def _matched_pad_rotation(
+    rotation: Any, reference_rotation: float | None, shape: SemanticShape | None
+) -> float | None:
+    if _shape_is_rotation_invariant(shape):
+        return None
+    return _relative_rotation(
+        rotation,
+        reference_rotation,
+        half_turn_symmetric=_shape_is_half_turn_symmetric(shape),
+    )
+
+
+def _shape_is_rotation_invariant(shape: SemanticShape | None) -> bool:
+    if shape is None:
+        return False
+    geometry_type = (
+        str(shape.auroradb_type or shape.kind or "").replace("_", "").casefold()
+    )
+    if geometry_type == "circle":
+        return True
+    if geometry_type in {"rectangle", "roundedrectangle"} and len(shape.values) >= 4:
+        width = _parse_float(shape.values[2])
+        height = _parse_float(shape.values[3])
+        return (
+            width is not None
+            and height is not None
+            and abs(abs(width) - abs(height)) <= 1e-12
+        )
+    return False
 
 
 def _shape_is_half_turn_symmetric(shape: SemanticShape | None) -> bool:
@@ -1348,6 +1517,8 @@ def _footprint_geometry_from_package(package: Any | None) -> dict[str, Any]:
 def _footprint_pad_geometry_from_package(package: Any) -> list[dict[str, Any]]:
     result: list[dict[str, Any]] = []
     for pin_index, package_pin in enumerate(package.pins or []):
+        if _is_empty_package_pin_name(package_pin.name):
+            continue
         for shape_index, package_shape in enumerate(package_pin.shapes or []):
             shape = _shape_from_package_shape(package_shape)
             if shape is None:
@@ -1375,6 +1546,10 @@ def _footprint_pad_geometry_from_package(package: Any) -> list[dict[str, Any]]:
                 }
             )
     return result
+
+
+def _is_empty_package_pin_name(value: Any) -> bool:
+    return str(value or "").strip().casefold().startswith("empty-")
 
 
 def _package_outline_geometry(package_shape: Any) -> dict[str, Any] | None:
@@ -1427,6 +1602,7 @@ def _package_pad_infos_for_pin(
     component_index: int,
     pin_index: int,
     layer_names_by_key: dict[str, str],
+    side_metal_layer_names: dict[str, str],
 ) -> list[dict[str, Any]]:
     package_pin = _package_pin_for_component_pin(package, pin)
     if package_pin is None:
@@ -1437,8 +1613,13 @@ def _package_pad_infos_for_pin(
     if not candidate_shapes:
         return []
 
-    layer_name = _canonical_layer_name(
-        "TOP" if side_key == "top" else "BOTTOM", layer_names_by_key
+    layer_name = _side_pin_layer_name(
+        side_key,
+        layer_names_by_key,
+        side_metal_layer_names,
+    ) or _canonical_layer_name(
+        "TOP" if side_key == "top" else "BOTTOM",
+        layer_names_by_key,
     )
     result: list[dict[str, Any]] = []
     for shape_index, package_shape in enumerate(candidate_shapes):
@@ -1477,7 +1658,7 @@ def _package_pad_infos_for_pin(
                     package_pin.name or pin.name or pin.pin_index or pin_index,
                     shape_index,
                 ),
-                "name": pin.name or package_pin.name,
+                "name": package_pin.name or pin.name,
                 "net_id": net_id,
                 "layer_name": layer_name,
                 "position": position,
@@ -1499,10 +1680,15 @@ def _package_pin_for_component_pin(package: Any, pin: Any) -> Any | None:
         return None
     candidates = []
     if pin.name and not _is_no_net_name(str(pin.name)):
-        candidates.append(str(pin.name).casefold())
+        pin_name = str(pin.name).strip()
+        candidates.append(pin_name.casefold())
+        if "-" in pin_name:
+            package_pin_name = pin_name.rsplit("-", 1)[1].strip()
+            if package_pin_name:
+                candidates.append(package_pin_name.casefold())
     if pin.pin_index is not None:
-        candidates.append(str(pin.pin_index).casefold())
         candidates.append(str(pin.pin_index + 1).casefold())
+        candidates.append(str(pin.pin_index).casefold())
     for candidate in candidates:
         for package_pin in package_pins:
             if package_pin.name and str(package_pin.name).casefold() == candidate:
@@ -1515,7 +1701,7 @@ def _package_pin_for_component_pin(package: Any, pin: Any) -> Any | None:
 def _component_relative_point(
     component: Any, point: SemanticPoint | None
 ) -> SemanticPoint | None:
-    origin = point_from_pair(component.location)
+    origin = _component_location(component, None)
     if origin is None or point is None:
         return None
     rotation = _degrees_to_radians(component.rotation) or 0.0
@@ -1534,6 +1720,59 @@ def _component_relative_point(
         x=origin.x + rotated_x,
         y=origin.y + rotated_y,
     )
+
+
+def _component_location(component: Any, units: str | None) -> SemanticPoint | None:
+    origin = point_from_pair(component.location)
+    if origin is None:
+        return None
+    offset = _component_refloc_offset(component.properties.get("REFLOC"), units)
+    if offset is None:
+        return origin
+    return SemanticPoint.model_construct(
+        x=origin.x + offset[0],
+        y=origin.y + offset[1],
+    )
+
+
+def _component_refloc_offset(
+    value: str | None, target_units: str | None
+) -> tuple[float, float] | None:
+    if not value:
+        return None
+    fields = [field.strip() for field in str(value).split(",")]
+    if len(fields) < 3:
+        return None
+    x = _parse_float(fields[1])
+    y = _parse_float(fields[2])
+    if x is None or y is None:
+        return None
+    source_units = fields[0] or target_units
+    return (
+        _convert_component_offset_unit(x, source_units, target_units),
+        _convert_component_offset_unit(y, source_units, target_units),
+    )
+
+
+def _convert_component_offset_unit(
+    value: float, source_units: str | None, target_units: str | None
+) -> float:
+    source_scale = _component_unit_scale_to_mm(source_units)
+    target_scale = _component_unit_scale_to_mm(target_units)
+    if source_scale is None or target_scale is None:
+        return value
+    return value * source_scale / target_scale
+
+
+def _component_unit_scale_to_mm(units: str | None) -> float | None:
+    text = (units or "").strip().casefold()
+    if text in {"mm", "millimeter", "millimeters", "millimetre", "millimetres"}:
+        return 1.0
+    if text in {"mil", "mils"}:
+        return 0.0254
+    if text in {"in", "inch", "inches"}:
+        return 25.4
+    return None
 
 
 def _primitives_from_feature(
@@ -1773,6 +2012,34 @@ def _matrix_layer_names_by_key(payload: ODBLayout) -> dict[str, str]:
         if row.name:
             result[_layer_key(row.name)] = row.name
     return result
+
+
+def _matrix_drill_layer_keys(payload: ODBLayout) -> set[str]:
+    return {
+        _layer_key(row.name)
+        for row in (payload.matrix.rows if payload.matrix else [])
+        if row.name and _is_matrix_drill_row(row)
+    }
+
+
+def _side_metal_layer_names(payload: ODBLayout) -> dict[str, str]:
+    metal_layer_names: list[str] = []
+    for row in payload.matrix.rows if payload.matrix else []:
+        if not row.name:
+            continue
+        role = role_from_layer_type(
+            row.layer_type,
+            is_via_layer=_is_matrix_drill_row(row),
+        )
+        if role in {"signal", "plane"}:
+            metal_layer_names.append(row.name)
+
+    if not metal_layer_names:
+        return {}
+    return {
+        "top": metal_layer_names[0],
+        "bottom": metal_layer_names[-1],
+    }
 
 
 def _canonical_layer_name(
@@ -2438,6 +2705,16 @@ def _is_drill_layer(layer_name: str | None) -> bool:
     return bool(layer_name and layer_name.casefold().startswith("drill"))
 
 
+def _is_matrix_drill_row(row: Any) -> bool:
+    return _is_drill_layer_type(getattr(row, "layer_type", None)) or _is_drill_layer(
+        getattr(row, "name", None)
+    )
+
+
+def _is_drill_layer_type(layer_type: str | None) -> bool:
+    return "drill" in str(layer_type or "").casefold()
+
+
 def _layer_key(layer_name: str | None) -> str:
     return (layer_name or "").casefold()
 
@@ -2453,7 +2730,7 @@ def _drill_layer_spans(
     ]
     result: dict[str, list[str]] = {}
     for row in rows:
-        if not row.name or str(row.layer_type or "").casefold() != "drill":
+        if not row.name or not _is_drill_layer_type(row.layer_type):
             continue
         start = _canonical_layer_name(row.start_name, layer_names_by_key)
         end = _canonical_layer_name(row.end_name, layer_names_by_key)

@@ -25,12 +25,14 @@ from aurora_translator.targets.auroradb.direct import (
     _direct_replace_item_before_block,
 )
 from aurora_translator.targets.auroradb.formatting import (
+    _auroradb_output_unit,
     _format_number,
     _format_rotation,
     _is_finite,
     _normalize_degree,
     _number,
     _point_tuple,
+    _source_unit_for_auroradb_output,
     _source_rotations_are_clockwise,
 )
 from aurora_translator.targets.auroradb.geometry import (
@@ -72,23 +74,11 @@ logger = logging.getLogger("aurora_translator.targets.auroradb")
 
 
 def _library_unit(board: SemanticBoard) -> str:
-    return "mm" if _preserve_board_units(board) else "mil"
+    return _auroradb_output_unit(board.units)
 
 
 def _part_geometry_source_unit(board: SemanticBoard) -> str | None:
-    return None if _preserve_board_units(board) else board.units
-
-
-def _preserve_board_units(board: SemanticBoard) -> bool:
-    source_format = (board.metadata.source_format or "").casefold()
-    unit = (board.units or "").casefold()
-    return source_format in {"alg", "brd"} and unit in {
-        "mm",
-        "millimeter",
-        "millimeters",
-        "millimetre",
-        "millimetres",
-    }
+    return _source_unit_for_auroradb_output(board.units)
 
 
 def _aaf_text(lines: list[str]) -> str:
@@ -170,17 +160,19 @@ def _design_part_lines(
     footprint_names = _part_plan_footprint_names(board, part_export_plan)
     footprints_by_name = _footprints_by_name(board)
 
+    export_footprint_geometry = _board_exports_footprint_layer_geometry(board)
     for footprint_name, source_footprint_name in sorted(
         footprint_names.values(),
         key=lambda item: item[0].casefold(),
     ):
         lines.append(f"library add -footprint <{_quote_aaf(footprint_name)}>")
-        footprint = footprints_by_name.get(source_footprint_name.casefold())
-        lines.extend(
-            _footprint_geometry_commands(
-                footprint, footprint_name, source_unit=geometry_source_unit
+        if export_footprint_geometry:
+            footprint = footprints_by_name.get(source_footprint_name.casefold())
+            lines.extend(
+                _footprint_geometry_commands(
+                    footprint, footprint_name, source_unit=geometry_source_unit
+                )
             )
-        )
 
     emitted_footprint_pads: set[str] = set()
     for variant in sorted(
@@ -391,8 +383,8 @@ def _direct_add_footprint_pads(
     footprint_model = indexes.footprints_by_name.get(
         (source_footprint_name or footprint_name).casefold()
     )
-    if _source_prefers_component_footprint_pads(
-        source_format
+    if _component_prefers_component_footprint_pads(
+        component, source_format
     ) and _direct_add_component_footprint_pads(
         builder,
         component,
@@ -725,7 +717,7 @@ def _footprint_pad_commands(
     pads_by_id = {pad.id: pad for pad in board.pads}
     pins_by_id = {pin.id: pin for pin in board.pins}
     shapes_by_id = {shape.id: shape for shape in board.shapes}
-    if _source_prefers_component_footprint_pads(source_format):
+    if _component_prefers_component_footprint_pads(component, source_format):
         component_pad_commands = _component_footprint_pad_commands(
             component,
             footprint_name,
@@ -934,7 +926,52 @@ def _component_footprint_pad_score(
 
 
 def _source_prefers_component_footprint_pads(source_format: str | None) -> bool:
+    return False
+
+
+def _component_prefers_component_footprint_pads(
+    component: SemanticComponent | None, source_format: str | None
+) -> bool:
+    if _source_prefers_component_footprint_pads(source_format):
+        return True
+    if (source_format or "").casefold() != "odbpp" or component is None:
+        return False
+    return _component_has_xpedition_pad_origin(component)
+
+
+def _board_prefers_component_footprint_pads(board: SemanticBoard) -> bool:
+    if _source_prefers_component_footprint_pads(board.metadata.source_format):
+        return True
+    if (board.metadata.source_format or "").casefold() != "odbpp":
+        return False
+    return any(
+        _component_has_xpedition_pad_origin(component) for component in board.components
+    )
+
+
+def _component_has_xpedition_pad_origin(component: SemanticComponent) -> bool:
+    attribute_keys = {key.casefold() for key in component.attributes}
+    return bool(attribute_keys & {"refloc", "component_ai_origin"})
+
+
+def _source_uses_component_pad_shape_variants(source_format: str | None) -> bool:
     return (source_format or "").casefold() in {"odbpp"}
+
+
+def _source_exports_footprint_layer_geometry(source_format: str | None) -> bool:
+    return not _source_prefers_component_footprint_pads(source_format)
+
+
+def _board_exports_footprint_layer_geometry(board: SemanticBoard) -> bool:
+    return not _board_prefers_component_footprint_pads(board)
+
+
+def _footprint_has_package_pads(footprint: Any) -> bool:
+    geometry = getattr(footprint, "geometry", None)
+    if not geometry:
+        return False
+    package_pads = geometry.get("pads")
+    return isinstance(package_pads, list) and bool(package_pads)
 
 
 def _package_footprint_pad_commands(
@@ -1153,7 +1190,7 @@ def _part_export_plan(board: SemanticBoard) -> _PartExportPlan:
     groups: dict[str, dict[str, list[SemanticComponent]]] = {}
     part_names: dict[str, str] = {}
     footprint_names: dict[tuple[str, str], str] = {}
-    use_pad_shape_variants = _source_prefers_component_footprint_pads(
+    use_pad_shape_variants = _source_uses_component_pad_shape_variants(
         board.metadata.source_format
     )
     component_pad_signatures: dict[
@@ -1183,13 +1220,26 @@ def _part_export_plan(board: SemanticBoard) -> _PartExportPlan:
             str, dict[tuple[tuple[str, str, str, tuple[str, ...]], ...], int]
         ] = {}
         for component in board.components:
+            prefer_component_pads = _component_prefers_component_footprint_pads(
+                component, board.metadata.source_format
+            )
             footprint_name = _component_footprint_name(
                 component, footprint_by_id, footprint_by_name
             ) or _component_part_name(component)
             footprint_key = footprint_name.casefold()
-            signature = _component_footprint_shape_signature(
-                component, board, pad_shape_ids, indexes
-            )
+            if not prefer_component_pads and _footprint_has_package_pads(
+                indexes.footprints_by_name.get(footprint_key)
+            ):
+                signature = ()
+            else:
+                signature = _component_footprint_shape_signature(
+                    component,
+                    board,
+                    pad_shape_ids,
+                    indexes,
+                    source_unit=_part_geometry_source_unit(board),
+                    source_format=board.metadata.source_format,
+                )
             component_pad_signatures[component.id] = signature
             signature_counts.setdefault(footprint_key, {}).setdefault(signature, 0)
             signature_counts[footprint_key][signature] += 1
@@ -1219,6 +1269,7 @@ def _part_export_plan(board: SemanticBoard) -> _PartExportPlan:
     seen_export_names: set[str] = set()
     part_names_by_component_id: dict[str, str] = {}
     variants: list[_PartExportVariant] = []
+    canonical_footprint_names: dict[str, str] = {}
     for part_key in sorted(groups, key=lambda key: part_names[key].casefold()):
         footprint_groups = groups[part_key]
         source_part_name = part_names[part_key]
@@ -1241,6 +1292,9 @@ def _part_export_plan(board: SemanticBoard) -> _PartExportPlan:
                     default_pad_signatures.get(footprint_key, shape_signature),
                     export_footprint_names,
                     seen_footprint_names,
+                )
+                export_footprint_name = canonical_footprint_names.setdefault(
+                    export_footprint_name.casefold(), export_footprint_name
                 )
                 export_part_name = _part_export_name(
                     source_part_name,
@@ -1271,6 +1325,9 @@ def _component_footprint_shape_signature(
     board: SemanticBoard,
     pad_shape_ids: dict[tuple[str, str], str],
     indexes: _DirectPartIndexes,
+    *,
+    source_unit: str | None,
+    source_format: str | None,
 ) -> tuple[tuple[str, str, str, tuple[str, ...]], ...]:
     selected_pads = _select_component_footprint_pads(
         component, board, pad_shape_ids, indexes
@@ -1280,12 +1337,30 @@ def _component_footprint_shape_signature(
         shape = indexes.shapes_by_id.get(selected.semantic_shape_id)
         if shape is None:
             continue
+        x, y = _relative_pad_location(
+            component,
+            selected.pad,
+            source_unit=source_unit,
+            source_format=source_format,
+        )
+        rotation = _format_footprint_pad_rotation(
+            selected.pad,
+            component,
+            source_format=source_format,
+        )
+        flip_options = _pad_flip_options(selected.pad).strip()
         result.append(
             (
                 selected.pin_name.casefold(),
                 shape.kind.casefold(),
                 _shape_auroradb_type(shape).casefold(),
-                tuple(_shape_signature_value(value) for value in shape.values),
+                (
+                    *(_shape_signature_value(value) for value in shape.values),
+                    f"x={_footprint_signature_number(x)}",
+                    f"y={_footprint_signature_number(y)}",
+                    f"rotation={rotation}",
+                    f"flip={flip_options}",
+                ),
             )
         )
     return tuple(sorted(result, key=lambda item: _pin_sort_key(item[0])))
@@ -1359,6 +1434,12 @@ def _shape_signature_value(value: str | float | int) -> str:
     if isinstance(value, float):
         return f"{value:.12g}"
     return str(value)
+
+
+def _footprint_signature_number(value: float) -> str:
+    if abs(value) < 5e-7:
+        return "0"
+    return f"{value:.6f}".rstrip("0").rstrip(".")
 
 
 def _part_export_name(
@@ -1607,9 +1688,9 @@ def _part_plan_footprint_names(
     result = {name.casefold(): (name, name) for name in _footprint_names(board)}
     for variant in part_export_plan.variants:
         source_footprint_name = variant.source_footprint_name or variant.footprint_name
-        result.setdefault(
-            variant.footprint_name.casefold(),
-            (variant.footprint_name, source_footprint_name),
+        result[variant.footprint_name.casefold()] = (
+            variant.footprint_name,
+            source_footprint_name,
         )
     return result
 

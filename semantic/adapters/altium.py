@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from math import cos, radians, sin
+from math import cos, isfinite, radians, sin
 from typing import Iterable
 
 from aurora_translator.semantic.adapters.utils import (
@@ -42,6 +42,7 @@ from aurora_translator.semantic.passes import (
 )
 from aurora_translator.sources.altium.models import (
     AltiumArc,
+    AltiumClass,
     AltiumComponent,
     AltiumFill,
     AltiumLayout,
@@ -50,6 +51,7 @@ from aurora_translator.sources.altium.models import (
     AltiumPoint,
     AltiumPolygon,
     AltiumRegion,
+    AltiumText,
     AltiumTrack,
     AltiumVertex,
     AltiumVia,
@@ -62,6 +64,7 @@ COPPER_MATERIAL_ID = semantic_id("material", "Copper")
 DEFAULT_PAD_SIZE_MIL = 10.0
 DEFAULT_VIA_DIAMETER_MIL = 16.0
 DEFAULT_VIA_HOLE_MIL = 8.0
+ALTIUM_INVALID_COORD_RAW_ABS = 2_147_000_000
 
 
 def from_altium(
@@ -167,20 +170,27 @@ def _semantic_layers(
 ) -> list[SemanticLayer]:
     layers: list[SemanticLayer] = []
     seen: set[str] = set()
-    for index, layer in enumerate(payload.layers or []):
-        if not _is_source_copper_layer(layer):
-            continue
+    source_layers = _source_stackup_copper_layer_items(payload.layers or [])
+    if not source_layers:
+        source_layers = [
+            (index, layer)
+            for index, layer in enumerate(payload.layers or [])
+            if _is_source_fallback_copper_layer(layer)
+        ]
+
+    for index, layer in source_layers:
         name = _layer_name(layer)
         key = name.casefold()
         if key in seen:
             continue
         seen.add(key)
+        role = _source_copper_layer_role(layer)
         layers.append(
             SemanticLayer(
                 id=semantic_id("layer", name, layer.layer_id),
                 name=name,
                 layer_type="copper",
-                role="signal",
+                role=role,
                 side=_layer_side(layer.layer_id, name),
                 order_index=len(layers),
                 material="Copper",
@@ -312,27 +322,38 @@ def _semantic_components(
     footprints_by_name: dict[str, SemanticFootprint] = {}
     component_ids_by_index: dict[int, str] = {}
     footprint_ids_by_component: dict[int, str] = {}
+    component_indices_with_pads = {
+        pad.component
+        for pad in payload.pads or []
+        if pad.component not in ALTIUM_UNCONNECTED_INDEXES
+        and not _is_unnamed_no_net_component_pad(pad)
+    }
+    designators_by_component_index = _component_designators_by_index(payload)
+    part_names_by_component_index = _component_comment_texts_by_index(payload)
 
     for index, component in enumerate(payload.components or []):
+        if component.index not in component_indices_with_pads:
+            continue
         footprint_name = _footprint_name(component)
+        part_name = _component_part_name(component, part_names_by_component_index)
         footprint = footprints_by_name.get(footprint_name)
         if footprint is None:
             footprint = SemanticFootprint(
                 id=semantic_id("footprint", footprint_name),
                 name=footprint_name,
-                part_name=component.source_lib_reference,
+                part_name=part_name,
                 attributes=_component_library_attributes(component),
                 source=source_ref("altium", f"components[{index}]", component.index),
             )
             footprints_by_name[footprint_name] = footprint
 
-        refdes = component.source_designator or f"ALTIUM_COMP_{component.index}"
+        refdes = _component_refdes(component, designators_by_component_index)
         layer_name = _component_layer_name(component, top_layer, bottom_layer)
         semantic_component = SemanticComponent(
             id=semantic_id("component", f"{refdes}:{component.index}"),
             refdes=refdes,
             name=refdes,
-            part_name=component.source_lib_reference,
+            part_name=part_name,
             package_name=footprint_name,
             footprint_id=footprint.id,
             layer_name=layer_name,
@@ -355,6 +376,82 @@ def _semantic_components(
     )
 
 
+def _component_refdes(
+    component: AltiumComponent, designators_by_component_index: dict[int, str]
+) -> str:
+    return (
+        component.source_designator
+        or designators_by_component_index.get(component.index)
+        or f"ALTIUM_COMP_{component.index}"
+    )
+
+
+def _component_part_name(
+    component: AltiumComponent, part_names_by_component_index: dict[int, str]
+) -> str | None:
+    return (
+        component.source_lib_reference
+        or part_names_by_component_index.get(component.index)
+        or component.properties.get("COMMENT")
+        or component.properties.get("Comment")
+    )
+
+
+def _component_designators_by_index(payload: AltiumLayout) -> dict[int, str]:
+    components = list(payload.components or [])
+    if not components:
+        return {}
+    component_class = _component_designator_class(
+        payload.classes or [], len(components)
+    )
+    if component_class is None:
+        return {}
+    result: dict[int, str] = {}
+    for component, member in zip(components, component_class.members, strict=False):
+        designator = member.strip()
+        if designator:
+            result[component.index] = designator
+    return result
+
+
+def _component_designator_class(
+    classes: Iterable[AltiumClass], component_count: int
+) -> AltiumClass | None:
+    candidates = [item for item in classes if len(item.members) >= component_count]
+    if not candidates:
+        candidates = [item for item in classes if len(item.members) == component_count]
+    if not candidates:
+        return None
+    for item in candidates:
+        if item.name.casefold() == "inside board components":
+            return item
+    for item in candidates:
+        if "component" in item.name.casefold():
+            return item
+    return candidates[0]
+
+
+def _component_comment_texts_by_index(payload: AltiumLayout) -> dict[int, str]:
+    result: dict[int, str] = {}
+    for text in sorted(payload.texts or [], key=lambda item: item.index):
+        component_index = text.component
+        if component_index in ALTIUM_UNCONNECTED_INDEXES or component_index in result:
+            continue
+        value = _component_comment_text(text)
+        if value:
+            result[component_index] = value
+    return result
+
+
+def _component_comment_text(text: AltiumText) -> str | None:
+    if not text.is_comment:
+        return None
+    value = text.text.strip()
+    if not value or value.casefold() == ".designator":
+        return None
+    return value
+
+
 def _semantic_pads(
     payload: AltiumLayout,
     component_ids_by_index: dict[int, str],
@@ -371,6 +468,8 @@ def _semantic_pads(
     nets_by_id: dict[str, SemanticNet],
 ) -> None:
     for index, pad in enumerate(payload.pads or []):
+        if _is_unnamed_no_net_component_pad(pad):
+            continue
         component_id = _component_id(pad.component, component_ids_by_index)
         footprint_id = (
             footprint_ids_by_component.get(pad.component) if component_id else None
@@ -440,6 +539,14 @@ def _semantic_pads(
             unique_append(nets_by_id[net_id].pad_ids, pad_id)
             if pin_id is not None:
                 unique_append(nets_by_id[net_id].pin_ids, pin_id)
+
+
+def _is_unnamed_no_net_component_pad(pad: AltiumPad) -> bool:
+    return (
+        not pad.name.strip()
+        and pad.net in ALTIUM_UNCONNECTED_INDEXES
+        and pad.component not in ALTIUM_NO_COMPONENT_INDEXES
+    )
 
 
 def _semantic_via_templates(
@@ -589,7 +696,9 @@ def _track_primitive(
     index: int,
     net_ids_by_index: dict[int, str],
     component_ids_by_index: dict[int, str],
-) -> SemanticPrimitive:
+) -> SemanticPrimitive | None:
+    if not _is_valid_point(track.start) or not _is_valid_point(track.end):
+        return None
     return SemanticPrimitive(
         id=semantic_id("primitive", f"track:{track.index}"),
         kind="keepout" if track.is_keepout else "trace",
@@ -600,8 +709,8 @@ def _track_primitive(
             record_kind="TRACK",
             width=track.width,
             center_line=[
-                [track.start.x, track.start.y],
-                [track.end.x, track.end.y],
+                _point_values(track.start),
+                _point_values(track.end),
             ],
             feature_id=track.polygon,
         ),
@@ -614,8 +723,10 @@ def _arc_primitive(
     index: int,
     net_ids_by_index: dict[int, str],
     component_ids_by_index: dict[int, str],
-) -> SemanticPrimitive:
+) -> SemanticPrimitive | None:
     geometry = _arc_geometry(arc.center, arc.radius, arc.start_angle, arc.end_angle)
+    if geometry is None:
+        return None
     return SemanticPrimitive(
         id=semantic_id("primitive", f"arc:{arc.index}"),
         kind="keepout" if arc.is_keepout else "arc",
@@ -642,10 +753,12 @@ def _fill_primitive(
     index: int,
     net_ids_by_index: dict[int, str],
     component_ids_by_index: dict[int, str],
-) -> SemanticPrimitive:
+) -> SemanticPrimitive | None:
     raw_points = _rotated_rectangle_points(
         fill.position1, fill.position2, fill.rotation
     )
+    if len(raw_points) < 2:
+        return None
     return SemanticPrimitive(
         id=semantic_id("primitive", f"fill:{fill.index}"),
         kind="keepout" if fill.is_keepout else "polygon",
@@ -726,7 +839,9 @@ def _polygon_primitive(
 def _board_outline(payload: AltiumLayout) -> SemanticBoardOutlineGeometry:
     if payload.board is None or not payload.board.outline:
         return SemanticBoardOutlineGeometry()
-    values = _vertex_points(payload.board.outline)
+    values = [
+        _point_tuple_value(point) for point in _vertex_points(payload.board.outline)
+    ]
     if len(values) < 2:
         return SemanticBoardOutlineGeometry()
     return SemanticBoardOutlineGeometry(
@@ -894,22 +1009,40 @@ def _component_library_attributes(component: AltiumComponent) -> dict[str, str]:
 
 
 def _via_template_key(via: AltiumVia) -> tuple[object, ...]:
+    fallback = via.diameter if via.diameter > 0 else DEFAULT_VIA_DIAMETER_MIL
     return (
         round(via.diameter, 9),
         round(via.hole_size, 9),
         via.start_layer_name,
         via.end_layer_name,
         via.via_mode,
-        tuple(round(value, 9) for value in via.diameter_by_layer),
+        tuple(
+            round(_normalized_via_layer_diameter(value, fallback), 9)
+            for value in via.diameter_by_layer
+        ),
     )
 
 
 def _via_layer_diameter(via: AltiumVia, layer_index: int, fallback: float) -> float:
     if layer_index < len(via.diameter_by_layer):
-        value = via.diameter_by_layer[layer_index]
-        if value > 0:
-            return value
+        return _normalized_via_layer_diameter(
+            via.diameter_by_layer[layer_index],
+            fallback,
+        )
     return fallback
+
+
+def _normalized_via_layer_diameter(value: float, fallback: float) -> float:
+    if value <= 0 or not isfinite(value):
+        return fallback
+    scaled = value / 256.0
+    if fallback > 0 and abs(scaled - fallback) <= max(0.01, fallback * 0.05):
+        return fallback
+    if value > max(500.0, fallback * 10.0):
+        if fallback <= 0 or fallback * 0.5 <= scaled <= fallback * 2.0:
+            return scaled
+        return fallback
+    return value
 
 
 def _layer_span(
@@ -928,15 +1061,18 @@ def _layer_span(
 
 def _arc_geometry(
     center: AltiumPoint, radius: float, start_angle: float, end_angle: float
-) -> SemanticArcGeometry:
+) -> SemanticArcGeometry | None:
+    if not _is_valid_point(center):
+        return None
     start = _arc_point(center, radius, start_angle)
     end = _arc_point(center, radius, end_angle)
     span = (end_angle - start_angle) % 360.0
     clockwise = span > 0.0
+    center_values = _point_values(center)
     return SemanticArcGeometry(
         start=start,
         end=end,
-        center=[center.x, center.y],
+        center=center_values,
         radius=radius,
         clockwise=clockwise,
         is_ccw=not clockwise,
@@ -945,37 +1081,54 @@ def _arc_geometry(
 
 def _arc_point(center: AltiumPoint, radius: float, angle: float) -> list[float]:
     angle_radians = radians(angle)
+    center_x, center_y = _point_values(center)
     return [
-        center.x + radius * cos(angle_radians),
-        center.y - radius * sin(angle_radians),
+        center_x + radius * cos(angle_radians),
+        center_y + radius * sin(angle_radians),
     ]
 
 
 def _vertex_points(vertices: Iterable[AltiumVertex]) -> list[list[float]]:
-    return [[vertex.position.x, vertex.position.y] for vertex in vertices]
+    return [
+        _point_values(vertex.position)
+        for vertex in vertices
+        if _is_valid_point(vertex.position)
+    ]
+
+
+def _point_tuple_value(point: list[float]) -> str:
+    return f"({point[0]:.12g},{point[1]:.12g})"
 
 
 def _vertex_arcs(vertices: Iterable[AltiumVertex]) -> list[SemanticArcGeometry]:
     arcs: list[SemanticArcGeometry] = []
     for vertex in vertices:
-        if not vertex.is_round or vertex.center is None:
+        if (
+            not vertex.is_round
+            or vertex.center is None
+            or not _is_valid_point(vertex.position)
+        ):
             continue
-        arcs.append(
-            _arc_geometry(
-                vertex.center,
-                vertex.radius,
-                vertex.start_angle,
-                vertex.end_angle,
-            )
+        geometry = _arc_geometry(
+            vertex.center,
+            vertex.radius,
+            vertex.start_angle,
+            vertex.end_angle,
         )
+        if geometry is not None:
+            arcs.append(geometry)
     return arcs
 
 
 def _rotated_rectangle_points(
     position1: AltiumPoint, position2: AltiumPoint, rotation: float
 ) -> list[list[float]]:
-    x1, x2 = sorted((position1.x, position2.x))
-    y1, y2 = sorted((position1.y, position2.y))
+    if not _is_valid_point(position1) or not _is_valid_point(position2):
+        return []
+    point1 = _point_values(position1)
+    point2 = _point_values(position2)
+    x1, x2 = sorted((point1[0], point2[0]))
+    y1, y2 = sorted((point1[1], point2[1]))
     points = [[x1, y1], [x2, y1], [x2, y2], [x1, y2]]
     if abs(rotation) < 1e-9:
         return points
@@ -1005,7 +1158,25 @@ def _bbox(points: list[list[float | int | None]]) -> list[float] | None:
 
 
 def _point(point: AltiumPoint) -> SemanticPoint:
-    return SemanticPoint(x=point.x, y=point.y)
+    x, y = _point_values(point)
+    return SemanticPoint(x=x, y=y)
+
+
+def _point_values(point: AltiumPoint) -> list[float]:
+    return [_clean_coordinate(point.x), _clean_coordinate(-point.y)]
+
+
+def _is_valid_point(point: AltiumPoint) -> bool:
+    return (
+        abs(point.x_raw) < ALTIUM_INVALID_COORD_RAW_ABS
+        and abs(point.y_raw) < ALTIUM_INVALID_COORD_RAW_ABS
+        and isfinite(point.x)
+        and isfinite(point.y)
+    )
+
+
+def _clean_coordinate(value: float) -> float:
+    return 0.0 if abs(value) < 1e-12 else value
 
 
 def _semantic_units(payload: AltiumLayout) -> str:
@@ -1054,8 +1225,57 @@ def _is_unconnected_net(net_index: int) -> bool:
     return net_index in ALTIUM_UNCONNECTED_INDEXES
 
 
-def _is_source_copper_layer(layer: AltiumLayer) -> bool:
+def _source_stackup_copper_layer_items(
+    layers: list[AltiumLayer],
+) -> list[tuple[int, AltiumLayer]]:
+    indexed_by_id: dict[int, tuple[int, AltiumLayer]] = {
+        layer.layer_id: (index, layer) for index, layer in enumerate(layers)
+    }
+    current_id = 1
+    seen_ids: set[int] = set()
+    stackup: list[tuple[int, AltiumLayer]] = []
+
+    while current_id and current_id not in seen_ids:
+        seen_ids.add(current_id)
+        item = indexed_by_id.get(current_id)
+        if item is None:
+            break
+        _index, layer = item
+        if _is_source_stackup_copper_layer(layer):
+            stackup.append(item)
+        next_id = layer.next_id or 0
+        if next_id == 0:
+            break
+        current_id = next_id
+
+    if stackup and stackup[-1][1].layer_id == 32:
+        return stackup
+    return []
+
+
+def _is_source_stackup_copper_layer(layer: AltiumLayer) -> bool:
+    return (
+        _is_altium_signal_layer_id(layer.layer_id)
+        or _is_altium_plane_layer_id(layer.layer_id)
+    ) and not layer.mechanical_enabled
+
+
+def _is_source_fallback_copper_layer(layer: AltiumLayer) -> bool:
     return 1 <= layer.layer_id <= 32 and not layer.mechanical_enabled
+
+
+def _is_altium_signal_layer_id(layer_id: int) -> bool:
+    return 1 <= layer_id <= 32
+
+
+def _is_altium_plane_layer_id(layer_id: int) -> bool:
+    return 39 <= layer_id <= 54
+
+
+def _source_copper_layer_role(layer: AltiumLayer) -> str:
+    if _is_altium_plane_layer_id(layer.layer_id):
+        return "plane"
+    return "signal"
 
 
 def _is_metal_layer(layer: SemanticLayer) -> bool:

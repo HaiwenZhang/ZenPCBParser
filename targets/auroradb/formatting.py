@@ -14,18 +14,29 @@ _NUMBER_UNIT_RE = re.compile(
 
 
 def _length_to_mil(value: Any, *, source_unit: str | None) -> float | None:
+    return _length_to_unit(value, source_unit=source_unit, target_unit="mil")
+
+
+def _length_to_unit(
+    value: Any, *, source_unit: str | None, target_unit: str | None
+) -> float | None:
     if isinstance(value, bool) or value is None:
         return None
+    target_scale = _unit_scale_to_mil(target_unit)
     if isinstance(value, (int, float)):
         scale = _unit_scale_to_mil(source_unit)
-        return float(value) * scale if scale is not None else float(value)
+        if scale is None or target_scale in {None, 0}:
+            return float(value)
+        return float(value) * scale / target_scale
     number, unit = _number_and_unit(value)
     if number is None:
         return None
-    unit = (unit or source_unit or "mil").casefold()
+    unit = (unit or source_unit or target_unit or "mil").casefold()
     unit = unit.replace("μ", "u").replace("µ", "u")
     scale = _unit_scale_to_mil(unit)
-    return number * scale if scale is not None else number
+    if scale is None or target_scale in {None, 0}:
+        return number
+    return number * scale / target_scale
 
 
 @lru_cache(maxsize=128)
@@ -51,6 +62,42 @@ def _unit_scale_to_mil(unit: str | None) -> float | None:
     if normalized in {"in", "inch", "inches"}:
         return 1000.0
     return None
+
+
+def _auroradb_output_unit(source_unit: str | None) -> str:
+    normalized = (source_unit or "mil").casefold()
+    normalized = normalized.replace("μ", "u").replace("µ", "u")
+    if normalized in {"m", "meter", "meters", "metre", "metres"}:
+        return "m"
+    if normalized in {"mm", "millimeter", "millimeters", "millimetre", "millimetres"}:
+        return "mm"
+    if normalized in {
+        "um",
+        "micron",
+        "microns",
+        "micrometer",
+        "micrometers",
+        "micrometre",
+        "micrometres",
+    }:
+        return "um"
+    if normalized in {"inch", "inches", "in"}:
+        return "inch"
+    if normalized in {"mil", "mils"}:
+        return "mils"
+    return source_unit or "mils"
+
+
+def _source_unit_for_auroradb_output(source_unit: str | None) -> str | None:
+    output_unit = _auroradb_output_unit(source_unit)
+    if _unit_scale_to_mil(source_unit) is None:
+        return None
+    output_scale = _unit_scale_to_mil(output_unit)
+    source_scale = _unit_scale_to_mil(source_unit)
+    if output_scale is not None and source_scale is not None:
+        if math.isclose(output_scale, source_scale, rel_tol=0.0, abs_tol=1e-15):
+            return None
+    return source_unit
 
 
 def _number(value: Any) -> float | None:

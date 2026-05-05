@@ -73,7 +73,7 @@ flowchart TD
 ## Net 和 NoNet 映射
 
 - 普通 ODB++ net record 生成 `SemanticNet(name=<source name>)`。
-- `$NONE$`、`$NONE`、`NONE$`、`NoNet` 等无网络别名统一映射为 `SemanticNet(name="NoNet", role="no_net")`。
+- `$NONE$`、`$NONE$;;ID=...`、`$NONE`、`NONE$`、`NoNet` 等无网络别名统一映射为 `SemanticNet(name="NoNet", role="no_net")`。
 - net `FID` 记录建立 `feature -> net` 关系。
 - net `SNT` / pin reference 建立 `component pin -> net` 关系。
 - 位于 routable layer 的正极性 no-net trace / arc / polygon primitive 会提升到 `NoNet`，供 AuroraDB 输出可见 no-net geometry。
@@ -103,7 +103,7 @@ Package pin / package body geometry additionally maps:
 
 Component 映射规则：
 
-- `SemanticComponent.location` 来自 ODB++ component placement。
+- `SemanticComponent.location` 来自 ODB++ component placement；Mentor Xpedition `REFLOC` 的前两个偏移量会叠加到 placement。
 - `SemanticComponent.rotation` 来自 ODB++ component rotation，单位从 degree 转为 radian。
 - `SemanticComponent.side` 根据 component layer name 推导。
 - 如果一个 component 的所有 resolved pin pad 都在同一个 metal layer，则 `SemanticComponent.layer_name` 使用该 metal layer；否则回退到源 component layer。
@@ -114,16 +114,18 @@ Pin / Pad 映射规则：
 - `SemanticPin` 表示 pin 的电气连接和绝对位置。
 - `SemanticPad` 表示 pin pad 铜皮几何、绝对位置、layer、shape 和 rotation。
 - 优先使用 net `FID` 关联的真实 feature pad。
-- 如果 feature pad 无法绑定 pin，则回退到 package pin / package shape。
+- 如果 feature pad 无法绑定 pin，则回退到 package pin / package shape，并按 matrix 最外侧 signal / plane 层解析 top/bottom layer。
 - component pad 的 `shape_id`、`rotation`、`mirror_x` 会进入 `SemanticPad.geometry`。
 - footprint pad 在 AuroraDB target 阶段由 representative component pad 反推，不在 ODB++ adapter 中提前固化。
+- 对 ODB++ 来源，AuroraDB target 使用 component pad 反推 footprint pad 时，不导出 package body outline 到 footprint metal-layer geometry，避免 package-local outline 被当作 pad / component 尺寸渲染。
 
 ## Via 和 Via Template 映射
 
 ODB++ via 的基本规则：
 
-- drill-layer `P` feature 生成 point via。
-- drill-layer `L` feature 生成 slotted via。
+- matrix `DRILL` row（包括 Xpedition `d_1_2` 这类命名）的 `P` feature 生成 point via。
+- matrix `DRILL` row 的 `L` feature 生成 slotted via。
+- 没有 net 绑定的 drill feature 会归入 `NoNet`。
 - drill layer 的 start/end metal layer 由 matrix row 的 start/end name 决定。
 - `SemanticVia.template_id` 指向 `SemanticViaTemplate`。
 - `SemanticVia.position` 是 via center。
@@ -394,7 +396,7 @@ flowchart TD
 ## Net And NoNet Mapping
 
 - A normal ODB++ net record becomes `SemanticNet(name=<source name>)`.
-- `$NONE$`, `$NONE`, `NONE$`, and source `NoNet` aliases become `SemanticNet(name="NoNet", role="no_net")`.
+- `$NONE$`, `$NONE$;;ID=...`, `$NONE`, `NONE$`, and source `NoNet` aliases become `SemanticNet(name="NoNet", role="no_net")`.
 - Net `FID` records build `feature -> net` links.
 - Net `SNT` / pin references build `component pin -> net` links.
 - Positive no-net trace / arc / polygon primitives on routable layers are promoted to `NoNet` so they remain visible in AuroraDB output.
@@ -424,7 +426,7 @@ Package geometry additionally maps:
 
 Component rules:
 
-- `SemanticComponent.location` comes from ODB++ component placement.
+- `SemanticComponent.location` comes from ODB++ component placement; the first two Mentor Xpedition `REFLOC` offsets are applied to the placement.
 - `SemanticComponent.rotation` comes from ODB++ component rotation, converted from degrees to radians.
 - `SemanticComponent.side` is derived from the component layer name.
 - If all resolved pin pads for a component share one metal layer, `SemanticComponent.layer_name` uses that metal layer; otherwise it falls back to the source component layer.
@@ -435,16 +437,18 @@ Pin / pad rules:
 - `SemanticPin` represents pin connectivity and absolute pin position.
 - `SemanticPad` represents pin-pad copper geometry, absolute position, layer, shape, and rotation.
 - Real feature pads associated by net `FID` are preferred.
-- If feature pads cannot be bound to a pin, package pin / package shape data is used as fallback.
+- If feature pads cannot be bound to a pin, package pin / package shape data is used as fallback, with top/bottom layers resolved from the outermost signal / plane rows in the matrix.
 - Component pad `shape_id`, `rotation`, and `mirror_x` are stored in `SemanticPad.geometry`.
 - Footprint pads are inferred later by the AuroraDB target from representative component pads; they are not frozen in the ODB++ adapter.
+- For ODB++ sources, when the AuroraDB target infers footprint pads from component pads, package body outlines are not exported as footprint metal-layer geometry so package-local outlines are not rendered as pad or component size.
 
 ## Via And Via Template Mapping
 
 Base via rules:
 
-- Drill-layer `P` features create point vias.
-- Drill-layer `L` features create slotted vias.
+- `P` features on matrix `DRILL` rows, including Xpedition names such as `d_1_2`, create point vias.
+- `L` features on matrix `DRILL` rows create slotted vias.
+- Drill features without a net binding join `NoNet`.
 - Drill start/end metal layers come from matrix row start/end names.
 - `SemanticVia.template_id` points to `SemanticViaTemplate`.
 - `SemanticVia.position` is the via center.

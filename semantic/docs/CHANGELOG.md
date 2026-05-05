@@ -8,6 +8,25 @@
 
 [English](#en) | [返回顶部](#top)
 
+## 0.7.17
+
+- Altium -> SemanticBoard 现在会把 PcbDoc 坐标归一到 AuroraDB/ODB++ 使用的 Y 轴方向，并过滤 `2147483647` 这类无效坐标哨兵，避免 region / polygon 金属层几何写出 `214748.3647 mil` 级别的异常顶点。Semantic JSON schema 保持 `0.7.2`。
+- Altium -> SemanticBoard 现在会归一旧 Altium source JSON 中已按 256 倍放大的 `diameter_by_layer` via pad 直径，避免旧 dump 继续把 18/16mil via pad 写成 4608/4096mil 圆形。Semantic JSON schema 保持 `0.7.2`。
+- Altium board outline 顶点现在与 ODB++ adapter 一样写成 AuroraDB polygon token（如 `"(x,y)"`），不再把 Python list 顶点透传到后续 exporter。
+
+## 0.7.16
+
+- Altium -> SemanticBoard 会在 component record 缺少 designator / lib reference 时，从 `Inside Board Components` class 成员顺序恢复 refdes，并从 component comment text 恢复 part name；无名且 no-net 的 component pad 会作为非电气 pad 跳过。Semantic JSON schema 保持 `0.7.2`。
+- ODB++ -> SemanticBoard 会把重复 package 名后缀（如 `_1_2`）归并到基础 package，优先使用 package pin 名而不是 `REFDES-pin` component token，并过滤 `empty-*` package pin；part name 中的小数尺寸单位会从 `0.65_MM` 规范化为 `0.65 MM`。Semantic JSON schema 保持 `0.7.2`。
+
+## 0.7.15
+
+- Altium -> SemanticBoard 现在从 PcbDoc `LAYERnNEXT` / `LAYERnPREV` 链路恢复实际 stackup，并把 `LAYER39`..`LAYER54` internal plane 作为 metal layer 映射。Semantic JSON schema 保持 `0.7.2`。
+- ODB++ -> SemanticBoard 的 component pin 和 package-pad fallback 现在把 top/bottom side 映射到 matrix 中最外侧 signal / plane 层，避免在没有可绑定 pad feature 时生成缺失的 `TOP` / `BOTTOM` layer 引用；Xpedition `REFLOC` 偏移会纳入 component placement。Semantic JSON schema 保持 `0.7.2`。
+- ODB++ -> SemanticBoard 现在识别 Xpedition `DRILL` matrix rows（如 `d_1_2`）并生成 blind/buried via；无 net drill feature 会归入 `NoNet`，`$NONE$;;ID=...` no-net 名称会合并为 `NoNet`，via template matching 会优先选择非 component 的 via land pad 并忽略圆形 pad 旋转。
+- BRD -> SemanticBoard 在 header 声明 `mils` 时现在保留 `mil` 源单位和 mil 坐标值，不再先规范化成 mm；无法可靠识别单位的 BRD 仍回退到 mm。Semantic JSON schema 保持 `0.7.2`。
+- 验证 `examples/odbpp_cases/LD20-28567_B_MAIN_BOARD.tgz`：Semantic 输出为 `via_templates=15`、`vias=65766`、`diagnostics=0`。验证 `<ODBPP_CASES>/Mentor-Xpedition-batch` 15 个 `.tgz` 样本：ODB++ source diagnostics 均为 `0`，AuroraDB readback diagnostics 均为 `0`，Semantic diagnostics 均为 `0`。
+
 ## 0.7.10
 
 - BRD -> SemanticBoard 现在区分 footprint-local `PartPad` 旋转、layout 绝对 pad 旋转和 component-pad `NetVias` instance 旋转，避免部分长方形和多边形 component pad 额外叠加 component rotation。
@@ -429,6 +448,25 @@
 ## English
 
 [中文](#zh) | [Back to top](#top)
+
+## 0.7.17
+
+- Altium -> SemanticBoard now normalizes PcbDoc coordinates to the Y-axis direction used by AuroraDB/ODB++ and filters invalid coordinate sentinels such as `2147483647`, preventing region / polygon metal-layer geometry from emitting abnormal `214748.3647 mil` vertices. Semantic JSON schema remains `0.7.2`.
+- Altium -> SemanticBoard now normalizes legacy Altium source JSON where via `diameter_by_layer` values were already scaled by 256, preventing older dumps from continuing to emit 18/16mil via pads as 4608/4096mil circles. Semantic JSON schema remains `0.7.2`.
+- Altium board-outline vertices are now emitted as AuroraDB polygon tokens such as `"(x,y)"`, matching the ODB++ adapter instead of passing Python list vertices through to downstream exporters.
+
+## 0.7.16
+
+- Altium -> SemanticBoard now recovers refdes from `Inside Board Components` class member order and part names from component comment text when component records omit designator / lib reference; unnamed no-net component pads are treated as non-electrical and skipped. Semantic JSON schema remains `0.7.2`.
+- ODB++ -> SemanticBoard now canonicalizes duplicate package suffixes such as `_1_2` back to the base package, prefers package pin names over `REFDES-pin` component tokens, and filters `empty-*` package pins; decimal unit fragments in part names are normalized from forms such as `0.65_MM` to `0.65 MM`. Semantic JSON schema remains `0.7.2`.
+
+## 0.7.15
+
+- Altium -> SemanticBoard now recovers the actual stackup from PcbDoc `LAYERnNEXT` / `LAYERnPREV` links and maps `LAYER39`..`LAYER54` internal planes as metal layers. Semantic JSON schema remains `0.7.2`.
+- ODB++ -> SemanticBoard component-pin and package-pad fallback now maps top/bottom side to the outermost signal / plane layers from the matrix, avoiding missing `TOP` / `BOTTOM` layer references when a pin has no bindable pad feature; Xpedition `REFLOC` offsets are applied to component placement. Semantic JSON schema remains `0.7.2`.
+- ODB++ -> SemanticBoard now recognizes Xpedition `DRILL` matrix rows such as `d_1_2` and emits blind/buried vias; netless drill features join `NoNet`, `$NONE$;;ID=...` no-net names collapse to `NoNet`, and via-template matching prefers non-component via land pads while ignoring circle-pad rotation.
+- BRD -> SemanticBoard now preserves `mil` source units and mil coordinate values when the header declares `mils`, instead of normalizing them to mm first; BRD files whose units cannot be identified reliably still fall back to mm. Semantic JSON schema remains `0.7.2`.
+- Verified `examples/odbpp_cases/LD20-28567_B_MAIN_BOARD.tgz`: Semantic output reports `via_templates=15`, `vias=65766`, and `diagnostics=0`. Verified 15 `.tgz` samples from `<ODBPP_CASES>/Mentor-Xpedition-batch`: all ODB++ source diagnostics are `0`, all AuroraDB readbacks have diagnostics `0`, and all Semantic diagnostics are `0`.
 
 ## 0.7.10
 

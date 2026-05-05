@@ -207,15 +207,18 @@ class ArchitectureRefactorTests(unittest.TestCase):
                 source_name="TOP",
                 name="TOP",
                 kind="Metal",
-                thickness_mil=1.2,
+                thickness=1.2,
+                unit="mm",
                 material_name="COPPER_AURORA",
                 conductivity=5.8e7,
             )
         ]
 
+        self.assertIn("Unit mm", _stackup_dat(layers))
         self.assertIn("Metal TOP 1.2 5.8e7", _stackup_dat(layers))
         payload = _stackup_json(layers)
         self.assertEqual(payload["version"], "1.1")
+        self.assertEqual(payload["unit"], "mm")
         self.assertEqual(payload["layers"][0]["roughness"], {"type": "no"})
 
 

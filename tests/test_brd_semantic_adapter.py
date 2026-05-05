@@ -17,6 +17,25 @@ if str(PROJECT_PARENT) not in sys.path:
 
 
 class BRDSemanticAdapterTests(unittest.TestCase):
+    def test_brd_mil_source_units_are_preserved(self) -> None:
+        from types import SimpleNamespace
+
+        from aurora_translator.semantic.adapters.brd import (
+            _raw_coord_to_semantic,
+            _semantic_units,
+        )
+
+        payload = SimpleNamespace(
+            header=SimpleNamespace(
+                board_units="mils",
+                units_divisor=100,
+                coordinate_scale_nm=None,
+            )
+        )
+
+        self.assertEqual(_semantic_units(payload), "mil")
+        self.assertEqual(_raw_coord_to_semantic(payload, 1234), 12.34)
+
     def test_brd_adapter_ignores_stale_embedded_brd_stackup(self) -> None:
         from aurora_translator.semantic.adapters.brd import (
             _stackup_layers_from_design_xml,
@@ -67,7 +86,7 @@ class BRDSemanticAdapterTests(unittest.TestCase):
             payload_bytes = archive.getvalue()
             property_name = b"DBPartitionAttachment"
             block = (
-                b"\x3B\x00\x00\x00"
+                b"\x3b\x00\x00\x00"
                 + len(payload_bytes).to_bytes(4, "little")
                 + property_name
                 + b"\0" * (128 - len(property_name))
@@ -280,7 +299,11 @@ class BRDSemanticAdapterTests(unittest.TestCase):
             _component_text_layer,
             _refdes_inner_layer_map,
         )
-        from aurora_translator.sources.brd.models import BRDLayerInfo, BRDLayout, BRDText
+        from aurora_translator.sources.brd.models import (
+            BRDLayerInfo,
+            BRDLayout,
+            BRDText,
+        )
 
         payload = BRDLayout.model_validate(
             {

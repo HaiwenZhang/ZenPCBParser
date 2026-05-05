@@ -10,10 +10,12 @@ from aurora_translator.semantic.models import (
 )
 from aurora_translator.targets.auroradb.formatting import (
     MIL_PER_METER,
+    _auroradb_output_unit,
     _format_number,
     _format_scalar,
-    _length_to_mil,
+    _length_to_unit,
     _number,
+    _unit_scale_to_mil,
 )
 from aurora_translator.targets.auroradb.names import _standardize_name, _unique_name
 
@@ -30,7 +32,8 @@ class _ExportLayer:
     source_name: str | None
     name: str
     kind: str
-    thickness_mil: float
+    thickness: float
+    unit: str
     material_name: str
     material: SemanticMaterial | None = None
     generated: bool = False
@@ -44,6 +47,7 @@ def _export_layers(board: SemanticBoard) -> list[_ExportLayer]:
     materials_by_name = {
         material.name.casefold(): material for material in board.materials
     }
+    output_unit = _auroradb_output_unit(board.units)
     seen_names: set[str] = set()
     export_layers: list[_ExportLayer] = []
 
@@ -59,12 +63,14 @@ def _export_layers(board: SemanticBoard) -> list[_ExportLayer]:
         layer_name = _unique_name(
             _standardize_name(layer.name or f"Layer_{index}"), seen_names
         )
-        thickness = _length_to_mil(layer.thickness, source_unit=board.units)
+        thickness = _length_to_unit(
+            layer.thickness, source_unit=board.units, target_unit=output_unit
+        )
         if thickness is None or thickness <= 0:
             thickness = (
-                DEFAULT_METAL_THICKNESS_MIL
+                _mil_to_unit(DEFAULT_METAL_THICKNESS_MIL, output_unit)
                 if kind == "Metal"
-                else DEFAULT_DIELECTRIC_THICKNESS_MIL
+                else _mil_to_unit(DEFAULT_DIELECTRIC_THICKNESS_MIL, output_unit)
             )
 
         export_layers.append(
@@ -72,7 +78,8 @@ def _export_layers(board: SemanticBoard) -> list[_ExportLayer]:
                 source_name=layer.name,
                 name=layer_name,
                 kind=kind,
-                thickness_mil=thickness,
+                thickness=thickness,
+                unit=output_unit,
                 material_name=material_name,
                 material=material,
             )
@@ -85,21 +92,28 @@ def _with_generated_dielectrics(layers: list[_ExportLayer]) -> list[_ExportLayer
         return []
 
     result: list[_ExportLayer] = []
+    unit = layers[0].unit
     default_index = 0
     for index, layer in enumerate(layers):
         if index == 0 and layer.kind == "Metal":
-            result.append(_generated_dielectric("SOLDERMASK_TOP", "SOLDERMASK_AURORA"))
+            result.append(
+                _generated_dielectric("SOLDERMASK_TOP", "SOLDERMASK_AURORA", unit=unit)
+            )
         if result and layer.kind == "Metal" and result[-1].kind == "Metal":
             result.append(
                 _generated_dielectric(
-                    f"DIELECTRIC_AURORA_{default_index}", "DIELECTRIC_AURORA"
+                    f"DIELECTRIC_AURORA_{default_index}",
+                    "DIELECTRIC_AURORA",
+                    unit=unit,
                 )
             )
             default_index += 1
         result.append(layer)
         if index == len(layers) - 1 and layer.kind == "Metal":
             result.append(
-                _generated_dielectric("SOLDERMASK_BOTTOM", "SOLDERMASK_AURORA")
+                _generated_dielectric(
+                    "SOLDERMASK_BOTTOM", "SOLDERMASK_AURORA", unit=unit
+                )
             )
     return result
 
@@ -108,9 +122,9 @@ def _stackup_dat(layers: list[_ExportLayer], *, design_name: str | None = None) 
     lines = ["Stackup {"]
     if design_name:
         lines.append(f"Design {design_name}")
-    lines.append("Unit mil")
+    lines.append(f"Unit {_stackup_unit(layers)}")
     for layer in layers:
-        thickness = _format_number(layer.thickness_mil)
+        thickness = _format_number(layer.thickness)
         if layer.kind == "Metal":
             sigma = _format_stackup_scalar(
                 _material_property(layer, "conductivity", DEFAULT_CONDUCTIVITY)
@@ -186,7 +200,7 @@ def _stackup_json(layers: list[_ExportLayer]) -> dict[str, Any]:
             {
                 "name": layer.name,
                 "type": layer.kind,
-                "thickness": _format_number(layer.thickness_mil),
+                "thickness": _format_number(layer.thickness),
                 "material": layer.material_name,
                 "roughness": {"type": "no"},
                 "bot_roughness": {"type": "no"},
@@ -196,10 +210,16 @@ def _stackup_json(layers: list[_ExportLayer]) -> dict[str, Any]:
 
     return {
         "version": "1.1",
-        "unit": "mil",
+        "unit": _stackup_unit(layers),
         "materials": materials,
         "layers": stackup_layers,
     }
+
+
+def _stackup_unit(layers: list[_ExportLayer]) -> str:
+    if layers:
+        return layers[0].unit
+    return "mils"
 
 
 def _ordered_layers(layers: list[SemanticLayer]) -> list[SemanticLayer]:
@@ -249,17 +269,25 @@ def _layer_material(
     return candidates[0] if candidates else None
 
 
-def _generated_dielectric(name: str, material_name: str) -> _ExportLayer:
+def _generated_dielectric(name: str, material_name: str, *, unit: str) -> _ExportLayer:
     return _ExportLayer(
         source_name=None,
         name=name,
         kind="Dielectric",
-        thickness_mil=DEFAULT_DIELECTRIC_THICKNESS_MIL,
+        thickness=_mil_to_unit(DEFAULT_DIELECTRIC_THICKNESS_MIL, unit),
+        unit=unit,
         material_name=material_name,
         generated=True,
         permittivity=DEFAULT_PERMITTIVITY,
         dielectric_loss_tangent=DEFAULT_DIELECTRIC_LOSS_TANGENT,
     )
+
+
+def _mil_to_unit(value_mil: float, unit: str) -> float:
+    scale = _unit_scale_to_mil(unit)
+    if scale is None or scale == 0:
+        return value_mil
+    return value_mil / scale
 
 
 def _material_property(layer: _ExportLayer, field_name: str, default: Any) -> Any:

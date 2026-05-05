@@ -2823,7 +2823,7 @@ def _raw_coord_to_semantic(
         return float(value) / divisor
     if unit in {"mils", "mil"}:
         divisor = payload.header.units_divisor or 1
-        return float(value) / divisor * 0.0254
+        return float(value) / divisor
     scale_nm = payload.header.coordinate_scale_nm
     if scale_nm is not None and scale_nm > 0:
         return float(value) * scale_nm / 1_000_000.0
@@ -2851,5 +2851,9 @@ def _raw_point_to_semantic(
 
 
 def _semantic_units(payload: BRDLayout) -> str:
-    _ = payload
+    unit = payload.header.board_units.casefold()
+    if unit in {"millimeters", "millimeter", "mm"}:
+        return "mm"
+    if unit in {"mils", "mil"}:
+        return "mil"
     return "mm"
