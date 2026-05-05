@@ -99,13 +99,13 @@
       "additionalProperties": false,
       "properties": {
         "project_version": {
-          "default": "1.0.35",
+          "default": "1.0.44",
           "description": "Aurora Translator project version that produced this AuroraDB payload.",
           "title": "Project Version",
           "type": "string"
         },
         "parser_version": {
-          "default": "0.2.13",
+          "default": "0.2.14",
           "description": "AuroraDB parser version that produced this payload.",
           "title": "Parser Version",
           "type": "string"

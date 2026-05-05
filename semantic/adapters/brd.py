@@ -136,6 +136,12 @@ class _BRDStackupLayer:
     loss_tangent: str | None
 
 
+@dataclass(slots=True)
+class _BRDGeometryIndex:
+    segments_by_key: dict[int, BRDSegment]
+    shapes_by_key: dict[int, BRDShape]
+
+
 def from_brd(payload: BRDLayout, *, build_connectivity: bool = True) -> SemanticBoard:
     diagnostics = _source_diagnostics(payload)
     layers, materials = _semantic_stackup(payload)
@@ -146,6 +152,7 @@ def from_brd(payload: BRDLayout, *, build_connectivity: bool = True) -> Semantic
     nets, net_ids_by_assignment = _semantic_nets(payload)
     shapes: list[SemanticShape] = []
     shape_ids_by_key: dict[tuple[str, tuple[object, ...]], str] = {}
+    geometry_index = _source_geometry_index(payload)
 
     pad_definitions_by_key = {pad.key: pad for pad in payload.pad_definitions or []}
     padstack_template_rotations = _padstack_template_rotations(payload)
@@ -153,6 +160,7 @@ def from_brd(payload: BRDLayout, *, build_connectivity: bool = True) -> Semantic
         payload,
         layer_names,
         padstack_template_rotations,
+        geometry_index,
         shapes,
         shape_ids_by_key,
     )
@@ -182,6 +190,7 @@ def from_brd(payload: BRDLayout, *, build_connectivity: bool = True) -> Semantic
         pad_definitions_by_key,
         padstacks_by_key,
         padstack_names_by_key,
+        geometry_index,
         shapes,
         shape_ids_by_key,
     )
@@ -226,6 +235,13 @@ def from_brd(payload: BRDLayout, *, build_connectivity: bool = True) -> Semantic
     return board.with_computed_summary()
 
 
+def _source_geometry_index(payload: BRDLayout) -> _BRDGeometryIndex:
+    return _BRDGeometryIndex(
+        segments_by_key={segment.key: segment for segment in payload.segments or []},
+        shapes_by_key={shape.key: shape for shape in payload.shapes or []},
+    )
+
+
 def _source_diagnostics(payload: BRDLayout) -> list[SemanticDiagnostic]:
     return [
         SemanticDiagnostic(
@@ -238,7 +254,9 @@ def _source_diagnostics(payload: BRDLayout) -> list[SemanticDiagnostic]:
     ]
 
 
-def _semantic_stackup(payload: BRDLayout) -> tuple[list[SemanticLayer], list[SemanticMaterial]]:
+def _semantic_stackup(
+    payload: BRDLayout,
+) -> tuple[list[SemanticLayer], list[SemanticMaterial]]:
     brd_layers = _semantic_layers(payload)
     brd_metal_names = [layer.name for layer in brd_layers if _is_metal_layer(layer)]
     embedded_stackup = _embedded_brd_stackup(payload, brd_metal_names)
@@ -321,7 +339,9 @@ def _embedded_brd_stackup(
     stackup_layers = _read_embedded_brd_stackup_layers(payload, brd_metal_names)
     if not stackup_layers:
         return None
-    materials, material_ids_by_key = _semantic_materials_from_brd_stackup(stackup_layers)
+    materials, material_ids_by_key = _semantic_materials_from_brd_stackup(
+        stackup_layers
+    )
     return (
         _semantic_layers_from_brd_stackup(stackup_layers, material_ids_by_key),
         materials,
@@ -571,7 +591,9 @@ def _semantic_layers_from_brd_stackup(
                 material=layer.material,
                 material_id=material_ids_by_key.get(material_key),
                 thickness=layer.thickness,
-                source=source_ref("brd", f"embedded_stackup.layers[{layer.index}]", name),
+                source=source_ref(
+                    "brd", f"embedded_stackup.layers[{layer.index}]", name
+                ),
             )
         )
     return layers
@@ -794,6 +816,7 @@ def _semantic_via_templates(
     payload: BRDLayout,
     layer_names: list[str],
     padstack_template_rotations: dict[int, float],
+    geometry_index: _BRDGeometryIndex,
     shapes: list[SemanticShape],
     shape_ids_by_key: dict[tuple[str, tuple[object, ...]], str],
 ) -> tuple[list[SemanticViaTemplate], dict[int, str]]:
@@ -813,6 +836,7 @@ def _semantic_via_templates(
             index,
             barrel_diameter,
             template_rotation,
+            geometry_index,
             shapes,
             shape_ids_by_key,
         )
@@ -822,6 +846,7 @@ def _semantic_via_templates(
             index,
             pad_diameter or barrel_diameter,
             barrel_shape_id,
+            geometry_index,
             shapes,
             shape_ids_by_key,
             template_rotation=template_rotation,
@@ -837,6 +862,7 @@ def _semantic_via_templates(
                     index,
                     pad_diameter or barrel_diameter,
                     barrel_shape_id,
+                    geometry_index,
                     shapes,
                     shape_ids_by_key,
                     layer_index=layer_index,
@@ -982,6 +1008,7 @@ def _padstack_barrel_shape_id(
     padstack_index: int,
     fallback_diameter: float,
     template_rotation: float | None,
+    geometry_index: _BRDGeometryIndex,
     shapes: list[SemanticShape],
     shape_ids_by_key: dict[tuple[str, tuple[object, ...]], str],
 ) -> str:
@@ -1021,6 +1048,7 @@ def _padstack_layer_pad_shape_id(
     padstack_index: int,
     fallback_diameter: float,
     barrel_shape_id: str,
+    geometry_index: _BRDGeometryIndex,
     shapes: list[SemanticShape],
     shape_ids_by_key: dict[tuple[str, tuple[object, ...]], str],
     *,
@@ -1059,6 +1087,7 @@ def _padstack_layer_pad_shape_id(
         payload,
         _padstack_layer_component(padstack, layer_index, "pad"),
         padstack,
+        geometry_index,
         fallback_width=fallback_diameter,
         fallback_height=fallback_diameter,
         shapes=shapes,
@@ -1157,6 +1186,7 @@ def _padstack_component_shape_id(
     payload: BRDLayout,
     component: BRDPadstackComponent | None,
     padstack: BRDPadstack,
+    geometry_index: _BRDGeometryIndex,
     *,
     fallback_width: float,
     fallback_height: float,
@@ -1219,6 +1249,7 @@ def _padstack_component_shape_id(
         shape_id = _shape_symbol_shape_id(
             payload,
             component,
+            geometry_index,
             shapes,
             shape_ids_by_key,
             source_path=source_path,
@@ -1328,6 +1359,7 @@ def _oblong_polygon_shape_id(
 def _shape_symbol_shape_id(
     payload: BRDLayout,
     component: BRDPadstackComponent,
+    geometry_index: _BRDGeometryIndex,
     shapes: list[SemanticShape],
     shape_ids_by_key: dict[tuple[str, tuple[object, ...]], str],
     *,
@@ -1337,18 +1369,14 @@ def _shape_symbol_shape_id(
     shape_key = component.shape_key or component.z2_raw
     if not shape_key:
         return None
-    source_shape = next(
-        (shape for shape in payload.shapes or [] if shape.key == shape_key),
-        None,
-    )
+    source_shape = geometry_index.shapes_by_key.get(shape_key)
     if source_shape is None:
         return None
-    segments_by_key = {segment.key: segment for segment in payload.segments or []}
     _, values = _outline_chain_values(
         payload,
         source_shape.first_segment,
         source_shape.key,
-        segments_by_key,
+        geometry_index.segments_by_key,
     )
     if len(values) < 3:
         return None
@@ -1379,7 +1407,10 @@ def _padstack_via_position(
     angle = radians(float(pad_definition.rotation_mdeg or 0) / 1000.0 - 90.0)
     dx = offset_x * cos(angle) - offset_y * sin(angle)
     dy = offset_x * sin(angle) + offset_y * cos(angle)
-    return SemanticPoint(x=copper_center.x + dx, y=copper_center.y + dy)
+    return SemanticPoint.model_construct(
+        x=copper_center.x + dx,
+        y=copper_center.y + dy,
+    )
 
 
 def _pob_offset(padstack_name: str | None) -> tuple[float, float] | None:
@@ -1475,6 +1506,7 @@ def _placed_pad_shape_id(
     payload: BRDLayout,
     pad_definition: BRDPadDefinition | None,
     padstack: BRDPadstack | None,
+    geometry_index: _BRDGeometryIndex,
     *,
     width: float,
     height: float,
@@ -1535,6 +1567,7 @@ def _placed_pad_shape_id(
             payload,
             component,
             padstack,
+            geometry_index,
             fallback_width=width,
             fallback_height=height,
             shapes=shapes,
@@ -1578,6 +1611,7 @@ def _placed_pad_records(
     pad_definitions_by_key: dict[int, BRDPadDefinition],
     padstacks_by_key: dict[int, BRDPadstack],
     padstack_names_by_key: dict[int, str],
+    geometry_index: _BRDGeometryIndex,
     shapes: list[SemanticShape],
     shape_ids_by_key: dict[tuple[str, tuple[object, ...]], str],
 ) -> list[_PadRecord]:
@@ -1596,7 +1630,7 @@ def _placed_pad_records(
         height = abs(y_max - y_min)
         if width <= 0 or height <= 0:
             continue
-        copper_center = SemanticPoint(
+        copper_center = SemanticPoint.model_construct(
             x=(x_min + x_max) / 2.0,
             y=(y_min + y_max) / 2.0,
         )
@@ -1659,6 +1693,7 @@ def _placed_pad_records(
                 payload,
                 pad_definition,
                 padstack,
+                geometry_index,
                 width=width,
                 height=height,
                 placed_pad_index=index,
@@ -1692,8 +1727,12 @@ def _placed_pad_records(
                     layer_name=layer_name,
                     component_layer_name=component_layer_name,
                     side=(component_info.side if component_info else None) or "top",
-                    component_location=component_info.location if component_info else None,
-                    component_rotation=component_info.rotation if component_info else None,
+                    component_location=component_info.location
+                    if component_info
+                    else None,
+                    component_rotation=component_info.rotation
+                    if component_info
+                    else None,
                     pad_rotation=pad_rotation,
                     footprint_pad_rotation=footprint_pad_rotation,
                     via_rotation=via_rotation,
@@ -1814,7 +1853,7 @@ def _semantic_footprints(
 
     for index, (name, footprint_id) in enumerate(sorted(names.items())):
         footprints.append(
-            SemanticFootprint(
+            SemanticFootprint.model_construct(
                 id=footprint_id,
                 name=name,
                 pad_ids=pad_ids_by_footprint.get(footprint_id, []),
@@ -1851,7 +1890,7 @@ def _component_pin_pad_records(
             unique_append(pad_ids, record.pad_id)
             records_by_pin[record.pin_id].append(record)
             pads.append(
-                SemanticPad(
+                SemanticPad.model_construct(
                     id=record.pad_id,
                     name=record.pin_name,
                     footprint_id=footprint_id,
@@ -1862,7 +1901,7 @@ def _component_pin_pad_records(
                     position=record.center,
                     padstack_definition=record.padstack_definition
                     or str(record.pad.pad or ""),
-                    geometry=SemanticPadGeometry(
+                    geometry=SemanticPadGeometry.model_construct(
                         shape_id=record.shape_id,
                         source="brd_padstack_component"
                         if record.padstack_definition
@@ -1880,7 +1919,7 @@ def _component_pin_pad_records(
         for pin_id, pin_records in records_by_pin.items():
             first_pin_record = pin_records[0]
             pins.append(
-                SemanticPin(
+                SemanticPin.model_construct(
                     id=pin_id,
                     name=first_pin_record.pin_name,
                     component_id=component_id,
@@ -1897,7 +1936,7 @@ def _component_pin_pad_records(
             )
 
         components.append(
-            SemanticComponent(
+            SemanticComponent.model_construct(
                 id=component_id,
                 refdes=first_record.refdes or f"BRD_{component_key}",
                 name=first_record.refdes or f"BRD_{component_key}",
@@ -1940,7 +1979,7 @@ def _semantic_vias(
         net_id = net_ids_by_assignment.get(via.net_assignment)
         padstack = padstacks_by_key.get(via.padstack)
         vias.append(
-            SemanticVia(
+            SemanticVia.model_construct(
                 id=semantic_id("via", via.key, index),
                 name=str(via.key),
                 template_id=template_id,
@@ -1948,8 +1987,8 @@ def _semantic_vias(
                 layer_names=_padstack_layer_names(padstack, layer_names)
                 if padstack is not None
                 else layer_names,
-                position=SemanticPoint(x=x, y=y),
-                geometry=SemanticViaGeometry(rotation=0),
+                position=SemanticPoint.model_construct(x=x, y=y),
+                geometry=SemanticViaGeometry.model_construct(rotation=0),
                 source=source_ref("brd", f"vias[{index}]", via.key),
             )
         )
@@ -2008,14 +2047,14 @@ def _semantic_pad_definition_hole_vias(
         seen.add(key)
         index = start_index + len(vias)
         vias.append(
-            SemanticVia(
+            SemanticVia.model_construct(
                 id=semantic_id("via", f"pad:{placed_pad.key}:{index}"),
                 name=padstack_names_by_key.get(pad_definition.padstack),
                 template_id=template_id,
                 net_id=net_id,
                 layer_names=_padstack_layer_names(padstack, layer_names),
-                position=SemanticPoint(x=x, y=y),
-                geometry=SemanticViaGeometry(
+                position=SemanticPoint.model_construct(x=x, y=y),
+                geometry=SemanticViaGeometry.model_construct(
                     rotation=radians(float(pad_definition.rotation_mdeg or 0) / 1000.0)
                 ),
                 source=source_ref("brd", "pad_definitions", pad_definition.key),
@@ -2202,12 +2241,12 @@ def _segment_primitive(
 
     path = f"segments[{source_index}]" if source_index is not None else source_path
     if segment.kind == "line":
-        return SemanticPrimitive(
+        return SemanticPrimitive.model_construct(
             id=semantic_id("primitive", f"brd-line:{segment.key}"),
             kind="trace",
             layer_name=layer_name,
             net_id=net_id,
-            geometry=SemanticPrimitiveGeometry(
+            geometry=SemanticPrimitiveGeometry.model_construct(
                 record_kind="LINE",
                 feature_id=segment.key,
                 width=width,
@@ -2219,12 +2258,12 @@ def _segment_primitive(
     center = _raw_point_to_semantic(payload, segment.center_raw)
     if segment.kind != "arc" or center is None:
         return None
-    return SemanticPrimitive(
+    return SemanticPrimitive.model_construct(
         id=semantic_id("primitive", f"brd-arc:{segment.key}"),
         kind="arc",
         layer_name=layer_name,
         net_id=net_id,
-        geometry=SemanticPrimitiveGeometry(
+        geometry=SemanticPrimitiveGeometry.model_construct(
             record_kind="ARC",
             feature_id=segment.key,
             width=width,
@@ -2272,7 +2311,7 @@ def _shape_primitive(
             continue
         keepout_index = keepout_indexes.get(keepout.key)
         voids.append(
-            SemanticPolygonVoidGeometry(
+            SemanticPolygonVoidGeometry.model_construct(
                 raw_points=void_raw_points,
                 arcs=void_arcs,
                 source_contour_index=keepout_index,
@@ -2280,12 +2319,12 @@ def _shape_primitive(
         )
 
     bbox = _bbox_points(payload, shape.coords_raw)
-    return SemanticPrimitive(
+    return SemanticPrimitive.model_construct(
         id=semantic_id("primitive", f"brd-shape:{shape.key}"),
         kind="polygon",
         layer_name=layer_name,
         net_id=net_id,
-        geometry=SemanticPrimitiveGeometry(
+        geometry=SemanticPrimitiveGeometry.model_construct(
             record_kind="SHAPE",
             feature_id=shape.key,
             raw_points=raw_points,
@@ -2330,12 +2369,14 @@ def _segment_arc_geometry(
     if start is None or end is None:
         return None
     if segment.kind == "line":
-        return SemanticArcGeometry(start=start, end=end, is_segment=True)
+        return SemanticArcGeometry.model_construct(
+            start=start, end=end, is_segment=True
+        )
 
     center = _raw_point_to_semantic(payload, segment.center_raw)
     if center is None:
         return None
-    return SemanticArcGeometry(
+    return SemanticArcGeometry.model_construct(
         start=start,
         end=end,
         center=center,
@@ -2670,7 +2711,7 @@ def _footprint_instance_location(
     y = _raw_coord_to_semantic(payload, footprint_instance.y_raw)
     if x is None or y is None:
         return None
-    return SemanticPoint(x=x, y=y)
+    return SemanticPoint.model_construct(x=x, y=y)
 
 
 def _footprint_instance_rotation_degrees(
@@ -2767,8 +2808,8 @@ def _average_point(points: Iterable[SemanticPoint]) -> SemanticPoint:
         y_total += point.y
         count += 1
     if count == 0:
-        return SemanticPoint(x=0.0, y=0.0)
-    return SemanticPoint(x=x_total / count, y=y_total / count)
+        return SemanticPoint.model_construct(x=0.0, y=0.0)
+    return SemanticPoint.model_construct(x=x_total / count, y=y_total / count)
 
 
 def _raw_coord_to_semantic(

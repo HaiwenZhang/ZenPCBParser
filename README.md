@@ -207,19 +207,19 @@ uv run python .\main.py convert --from odbpp --to auroradb <odbpp-dir-or-archive
 
 当前版本：
 
-- Project version: `1.0.43`
+- Project version: `1.0.44`
 - AEDB parser version: `0.4.56`
 - AEDB JSON schema version: `0.5.0`
-- AuroraDB parser version: `0.2.13`
+- AuroraDB parser version: `0.2.14`
 - AuroraDB JSON schema version: `0.2.0`
 - ODB++ parser version: `0.6.3`
 - ODB++ JSON schema version: `0.6.0`
-- BRD parser version: `0.1.4`
-- BRD JSON schema version: `0.3.0`
+- BRD parser version: `0.1.9`
+- BRD JSON schema version: `0.5.0`
 - ALG parser version: `0.1.1`
 - ALG JSON schema version: `0.2.0`
-- Semantic parser version: `0.7.5`
-- Semantic JSON schema version: `0.7.1`
+- Semantic parser version: `0.7.13`
+- Semantic JSON schema version: `0.7.2`
 
 <a id="en"></a>
 ## English
@@ -425,16 +425,16 @@ The old `layout_parser` compatibility wrapper has moved to [layout_parser](../la
 
 Current versions:
 
-- Project version: `1.0.43`
+- Project version: `1.0.44`
 - AEDB parser version: `0.4.56`
 - AEDB JSON schema version: `0.5.0`
-- AuroraDB parser version: `0.2.13`
+- AuroraDB parser version: `0.2.14`
 - AuroraDB JSON schema version: `0.2.0`
 - ODB++ parser version: `0.6.3`
 - ODB++ JSON schema version: `0.6.0`
-- BRD parser version: `0.1.4`
-- BRD JSON schema version: `0.3.0`
+- BRD parser version: `0.1.9`
+- BRD JSON schema version: `0.5.0`
 - ALG parser version: `0.1.1`
 - ALG JSON schema version: `0.2.0`
-- Semantic parser version: `0.7.5`
-- Semantic JSON schema version: `0.7.1`
+- Semantic parser version: `0.7.13`
+- Semantic JSON schema version: `0.7.2`

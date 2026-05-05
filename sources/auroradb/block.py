@@ -260,7 +260,7 @@ def split_reserved(
             buf.append(char)
             if char == stack[-1]:
                 stack.pop()
-            elif stack[-1:] != ['"'] and char in opener_to_closer and char != '"':
+            elif stack[-1] != '"' and char in opener_to_closer:
                 stack.append(opener_to_closer[char])
             i += 1
             continue

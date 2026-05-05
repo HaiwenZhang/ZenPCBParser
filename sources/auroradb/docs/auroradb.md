@@ -20,8 +20,8 @@ design.part + design.layout -> auroradb.aaf -> AuroraDB
 
 ## 版本
 
-- 当前项目版本：`1.0.26`
-- 当前 AuroraDB 解析器版本：`0.2.13`
+- 当前项目版本：`1.0.44`
+- 当前 AuroraDB 解析器版本：`0.2.14`
 - 当前 AuroraDB JSON schema 版本：`0.2.0`
 - AuroraDB 读取、AAF 命令执行、AuroraDB 派生逻辑变化时，更新 `auroradb.version.AURORADB_PARSER_VERSION`，并体现在 `metadata.parser_version`。
 - AuroraDB JSON 字段增删、字段含义或结构变化时，更新 `auroradb.version.AURORADB_JSON_SCHEMA_VERSION`，并体现在 `metadata.output_schema_version`。
@@ -153,8 +153,8 @@ Architecture notes: [architecture.md](architecture.md).
 
 ## Versions
 
-- Current project version: `1.0.26`
-- Current AuroraDB parser version: `0.2.13`
+- Current project version: `1.0.44`
+- Current AuroraDB parser version: `0.2.14`
 - Current AuroraDB JSON schema version: `0.2.0`
 - Update `auroradb.version.AURORADB_PARSER_VERSION` when AuroraDB reading, AAF command execution, or AuroraDB generation logic changes; it is emitted as `metadata.parser_version`.
 - Update `auroradb.version.AURORADB_JSON_SCHEMA_VERSION` when AuroraDB JSON fields, field meanings, or structure change; it is emitted as `metadata.output_schema_version`.

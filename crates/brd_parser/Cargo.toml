@@ -1,6 +1,6 @@
 [package]
 name = "brd_parser"
-version = "0.1.7"
+version = "0.1.9"
 edition = "2021"
 description = "Cadence Allegro binary BRD parser core, CLI, and Python extension used by Aurora Translator"
 license = "MIT"

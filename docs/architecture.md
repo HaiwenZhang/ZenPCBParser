@@ -326,17 +326,17 @@ JSON payload 中统一输出：
 | Project | `1.0.44` |
 | AEDB parser | `0.4.56` |
 | AEDB JSON schema | `0.5.0` |
-| AuroraDB parser | `0.2.13` |
+| AuroraDB parser | `0.2.14` |
 | AuroraDB JSON schema | `0.2.0` |
 | ODB++ parser | `0.6.3` |
 | ODB++ JSON schema | `0.6.0` |
-| BRD parser | `0.1.6` |
+| BRD parser | `0.1.9` |
 | BRD JSON schema | `0.5.0` |
 | ALG parser | `0.1.1` |
 | ALG JSON schema | `0.2.0` |
 | Altium parser | `0.1.0` |
 | Altium JSON schema | `0.1.0` |
-| Semantic parser | `0.7.12` |
+| Semantic parser | `0.7.13` |
 | Semantic JSON schema | `0.7.2` |
 
 ## 开发和构建
@@ -721,17 +721,17 @@ Current versions:
 | Project | `1.0.44` |
 | AEDB parser | `0.4.56` |
 | AEDB JSON schema | `0.5.0` |
-| AuroraDB parser | `0.2.13` |
+| AuroraDB parser | `0.2.14` |
 | AuroraDB JSON schema | `0.2.0` |
 | ODB++ parser | `0.6.3` |
 | ODB++ JSON schema | `0.6.0` |
-| BRD parser | `0.1.6` |
+| BRD parser | `0.1.9` |
 | BRD JSON schema | `0.5.0` |
 | ALG parser | `0.1.1` |
 | ALG JSON schema | `0.2.0` |
 | Altium parser | `0.1.0` |
 | Altium JSON schema | `0.1.0` |
-| Semantic parser | `0.7.12` |
+| Semantic parser | `0.7.13` |
 | Semantic JSON schema | `0.7.2` |
 
 ## Development And Build

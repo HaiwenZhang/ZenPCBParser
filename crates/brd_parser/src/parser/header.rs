@@ -77,18 +77,28 @@ pub(crate) fn parse_header(reader: &mut Reader<'_>) -> Result<Header, BrdParseEr
     if version.ge(FormatVersion::V180) {
         linked_lists.insert("v18_6".to_string(), read_ll(reader, version)?);
         let _x35_start = reader.u32()?;
+        if !looks_like_header_string_at(reader, reader.position() + 4)
+            && looks_like_header_string_at(reader, reader.position() + 36)
+        {
+            for index in 0..4 {
+                linked_lists.insert(
+                    format!("v18_extra_{}", index + 1),
+                    read_ll(reader, version)?,
+                );
+            }
+        }
         let _x35_end = reader.u32()?;
     }
 
-    let expected_version_offset = if version.lt(FormatVersion::V180) {
-        0xF8
+    let version_offset = reader.position().saturating_sub(start);
+    let version_offset_valid = if version.lt(FormatVersion::V180) {
+        version_offset == 0xF8
     } else {
-        0x124
+        version_offset == 0x124 || version_offset == 0x144
     };
-    if reader.position().saturating_sub(start) != expected_version_offset {
+    if !version_offset_valid || !looks_like_header_string_at(reader, reader.position()) {
         return Err(BrdParseError::Invalid(format!(
-            "header version string offset mismatch: expected 0x{expected_version_offset:x}, got 0x{:x}",
-            reader.position().saturating_sub(start)
+            "header version string offset mismatch: got 0x{version_offset:x}"
         )));
     }
 
@@ -214,5 +224,141 @@ fn board_units_name(code: u8) -> &'static str {
         0x04 => "centimeters",
         0x05 => "micrometers",
         _ => "unknown",
+    }
+}
+
+fn looks_like_header_string_at(reader: &Reader<'_>, offset: usize) -> bool {
+    let Some(bytes) = reader.bytes.get(offset..offset.saturating_add(60)) else {
+        return false;
+    };
+    let end = bytes
+        .iter()
+        .position(|value| *value == 0)
+        .unwrap_or(bytes.len());
+    if end < 3 {
+        return false;
+    }
+    bytes[..end]
+        .iter()
+        .all(|value| value.is_ascii_graphic() || *value == b' ')
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_standard_v18_header_units() {
+        let fixture = v18_header_fixture(false);
+        let mut reader = Reader::new(&fixture);
+
+        let header = parse_header(&mut reader).expect("standard V18 header should parse");
+
+        assert_eq!(header.board_units_code, 5);
+        assert_eq!(header.board_units, "micrometers");
+        assert_eq!(header.units_divisor, 100);
+        assert_eq!(header.coordinate_scale_nm, Some(254.0));
+        assert!(!header.linked_lists.contains_key("v18_extra_1"));
+    }
+
+    #[test]
+    fn parses_extended_v18_header_units() {
+        let fixture = v18_header_fixture(true);
+        let mut reader = Reader::new(&fixture);
+
+        let header = parse_header(&mut reader).expect("extended V18 header should parse");
+
+        assert_eq!(header.board_units_code, 5);
+        assert_eq!(header.board_units, "micrometers");
+        assert_eq!(header.units_divisor, 100);
+        assert_eq!(header.coordinate_scale_nm, Some(254.0));
+        assert_eq!(header.linked_lists["v18_extra_1"].head, 0x7d);
+        assert_eq!(header.linked_lists["v18_extra_4"].head, 0x80);
+    }
+
+    fn v18_header_fixture(extra_slots: bool) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        for value in [
+            0x0015_0000,
+            0,
+            5,
+            0,
+            1_245_185,
+            178_370,
+            0,
+            0,
+            0,
+            0,
+            1_015_485,
+            0,
+            0,
+            1_982,
+            0,
+        ] {
+            push_u32(&mut bytes, value);
+        }
+        for index in 0..5 {
+            push_ll(&mut bytes, 0x60 + index, 0);
+        }
+        for index in 0..18 {
+            push_ll(&mut bytes, 0x70 + index, 0);
+        }
+        push_ll(&mut bytes, 0x90, 0);
+        push_ll(&mut bytes, 0x91, 0);
+        push_ll(&mut bytes, 0x92, 0);
+        push_ll(&mut bytes, 0x93, 0);
+        push_ll(&mut bytes, 0x7c, 0x0002_8b59);
+        push_u32(&mut bytes, 0x0002_8b59);
+        if extra_slots {
+            for index in 0..4 {
+                push_ll(&mut bytes, 0x7d + index, 0);
+            }
+        }
+        push_u32(&mut bytes, 0x0000_0fc9);
+        debug_assert_eq!(bytes.len(), if extra_slots { 0x144 } else { 0x124 });
+        push_fixed_string(
+            &mut bytes,
+            "all434989/14/all423499/4/2all414729/29/all4063610/6",
+            60,
+        );
+        push_u32(&mut bytes, 0x400);
+        push_u32(&mut bytes, 178_516);
+        for _ in 0..9 {
+            push_u32(&mut bytes, 0);
+        }
+        bytes.push(5);
+        bytes.extend_from_slice(&[0, 0, 0]);
+        push_u32(&mut bytes, 22);
+        push_u32(&mut bytes, 1);
+        for _ in 0..50 {
+            push_u32(&mut bytes, 0);
+        }
+        push_u32(&mut bytes, 255);
+        push_u32(&mut bytes, 0);
+        push_u32(&mut bytes, 1);
+        push_u32(&mut bytes, 100);
+        for _ in 0..110 {
+            push_u32(&mut bytes, 0);
+        }
+        for index in 0..25 {
+            push_u32(&mut bytes, index);
+            push_u32(&mut bytes, 0);
+        }
+        bytes
+    }
+
+    fn push_ll(bytes: &mut Vec<u8>, head: u32, tail: u32) {
+        push_u32(bytes, head);
+        push_u32(bytes, tail);
+    }
+
+    fn push_u32(bytes: &mut Vec<u8>, value: u32) {
+        bytes.extend_from_slice(&value.to_le_bytes());
+    }
+
+    fn push_fixed_string(bytes: &mut Vec<u8>, value: &str, len: usize) {
+        let mut fixed = vec![0; len];
+        fixed[..value.len()].copy_from_slice(value.as_bytes());
+        bytes.extend_from_slice(&fixed);
     }
 }

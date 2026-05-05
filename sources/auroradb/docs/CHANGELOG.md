@@ -8,6 +8,12 @@
 
 [English](#en) | [返回顶部](#top)
 
+## 0.2.14
+
+- `split_reserved()` 现在会在 parenthesized / bracketed reserved pair 内正确进入 quoted-string 状态，避免 `Attributes (PART_NAME,"..._(...)")` 这类值被误判为未闭合括号。
+- 使用大型 BRD 派生 AuroraDB 输出验证：`parts.db` 可读回，`diagnostics=0`。
+- AuroraDB JSON schema 保持 `0.2.0`；该版本只修正 block 文本读取兼容性。
+
 ## 0.2.13
 
 - AuroraDB block writer 现在会为包含括号或引号的普通字段值加引号，避免 part/footprint 名称中的 `(` 被写成无法回读的保留表达式。
@@ -110,6 +116,12 @@
 ## English
 
 [中文](#zh) | [Back to top](#top)
+
+## 0.2.14
+
+- `split_reserved()` now enters quoted-string state correctly inside parenthesized / bracketed reserved pairs, so values such as `Attributes (PART_NAME,"..._(...)")` are no longer misread as unclosed parentheses.
+- Verified with AuroraDB output derived from a large BRD sample: `parts.db` reads back with `diagnostics=0`.
+- AuroraDB JSON schema remains `0.2.0`; this release only fixes block text read compatibility.
 
 ## 0.2.13
 
