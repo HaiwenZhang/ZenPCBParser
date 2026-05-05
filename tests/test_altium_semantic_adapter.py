@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -13,6 +14,21 @@ if str(PROJECT_PARENT) not in sys.path:
 
 
 class AltiumSemanticAdapterTests(unittest.TestCase):
+    def test_altium_pad_solder_layer_maps_to_metal_side(self) -> None:
+        from aurora_translator.semantic.adapters.altium import _pad_layer_name
+
+        top_pad = SimpleNamespace(layer_name="Top Solder")
+        bottom_pad = SimpleNamespace(layer_name="Bottom Solder")
+
+        self.assertEqual(
+            _pad_layer_name(top_pad, None, {}, "TopLayer", "BottomLayer"),
+            "TopLayer",
+        )
+        self.assertEqual(
+            _pad_layer_name(bottom_pad, None, {}, "TopLayer", "BottomLayer"),
+            "BottomLayer",
+        )
+
     def test_altium_adapter_maps_basic_board_objects(self) -> None:
         from aurora_translator.semantic.adapters.altium import from_altium
         from aurora_translator.sources.altium.models import AltiumLayout
@@ -430,6 +446,228 @@ class AltiumSemanticAdapterTests(unittest.TestCase):
         self.assertEqual(_via_layer_diameter(via, 1, 18.0), 20.0)
         self.assertEqual(_via_layer_diameter(via, 2, 18.0), 20.0)
         self.assertEqual(_via_template_key(via)[5], (18.0, 20.0, 20.0))
+
+    def test_altium_region_inherits_polygon_net_and_keeps_voids(self) -> None:
+        from aurora_translator.semantic.adapters.altium import _region_primitive
+        from aurora_translator.sources.altium.models import AltiumRegion
+
+        def vertex(x_raw: int, y_raw: int) -> dict[str, object]:
+            return {
+                "is_round": False,
+                "radius": 0.0,
+                "start_angle": 0.0,
+                "end_angle": 0.0,
+                "position": {
+                    "x_raw": x_raw,
+                    "y_raw": y_raw,
+                    "x": x_raw / 10000.0,
+                    "y": -(y_raw / 10000.0),
+                },
+                "center": None,
+            }
+
+        region = AltiumRegion.model_validate(
+            {
+                "index": 10,
+                "layer_id": 2,
+                "layer_name": "L2_GND_1",
+                "net": 65535,
+                "component": 65535,
+                "polygon": 39,
+                "subpolygon": 0,
+                "kind": "copper",
+                "outline": [
+                    vertex(0, 0),
+                    vertex(10000, 0),
+                    vertex(10000, 10000),
+                ],
+                "holes": [
+                    [
+                        vertex(2000, 2000),
+                        vertex(3000, 2000),
+                        vertex(3000, 3000),
+                    ]
+                ],
+                "is_locked": False,
+                "is_keepout": False,
+                "is_shape_based": False,
+                "keepout_restrictions": 0,
+            }
+        )
+
+        primitive = _region_primitive(
+            region,
+            0,
+            {209: "net:GND", 65535: "net:NoNet"},
+            {},
+            {39: 209},
+        )
+
+        self.assertIsNotNone(primitive)
+        assert primitive is not None
+        self.assertEqual(primitive.net_id, "net:GND")
+        self.assertTrue(primitive.geometry.has_voids)
+        self.assertEqual(len(primitive.geometry.voids), 1)
+        self.assertEqual(primitive.geometry.raw_points[2], [1.0, 1.0])
+
+    def test_altium_polygon_uses_stackup_layer_name(self) -> None:
+        from aurora_translator.semantic.adapters.altium import _polygon_primitive
+        from aurora_translator.sources.altium.models import AltiumPolygon
+
+        def vertex(x_raw: int, y_raw: int) -> dict[str, object]:
+            return {
+                "is_round": False,
+                "radius": 0.0,
+                "start_angle": 0.0,
+                "end_angle": 0.0,
+                "position": {
+                    "x_raw": x_raw,
+                    "y_raw": y_raw,
+                    "x": x_raw / 10000.0,
+                    "y": -(y_raw / 10000.0),
+                },
+                "center": None,
+            }
+
+        polygon = AltiumPolygon.model_validate(
+            {
+                "index": 31,
+                "layer_id": 5,
+                "layer_name": "MID4",
+                "net": 12,
+                "locked": False,
+                "hatch_style": "Solid",
+                "use_octagons": False,
+                "pour_index": 30,
+                "vertices": [vertex(0, 0), vertex(10000, 0), vertex(0, 10000)],
+                "properties": {},
+            }
+        )
+
+        primitive = _polygon_primitive(
+            polygon, 0, {12: "net:NVCC_1V8"}, {5: "L5_PWR_1"}
+        )
+
+        self.assertIsNotNone(primitive)
+        assert primitive is not None
+        self.assertEqual(primitive.layer_name, "L5_PWR_1")
+        self.assertEqual(primitive.net_id, "net:NVCC_1V8")
+
+    def test_altium_board_outline_preserves_round_corner_arcs(self) -> None:
+        from aurora_translator.semantic.adapters.altium import _board_outline_values
+        from aurora_translator.sources.altium.models import AltiumVertex
+
+        def vertex(
+            x: float,
+            y: float,
+            *,
+            round_: bool = False,
+            center: tuple[float, float] | None = None,
+        ) -> AltiumVertex:
+            payload: dict[str, object] = {
+                "is_round": round_,
+                "radius": 10.0 if round_ else 0.0,
+                "start_angle": 0.0,
+                "end_angle": 0.0,
+                "position": {
+                    "x_raw": int(x * 10000),
+                    "y_raw": int(-y * 10000),
+                    "x": x,
+                    "y": -y,
+                },
+                "center": None,
+            }
+            if center is not None:
+                cx, cy = center
+                payload["center"] = {
+                    "x_raw": int(cx * 10000),
+                    "y_raw": int(-cy * 10000),
+                    "x": cx,
+                    "y": -cy,
+                }
+            return AltiumVertex.model_validate(payload)
+
+        values = _board_outline_values(
+            [
+                vertex(0.0, 10.0),
+                vertex(0.0, 90.0, round_=True, center=(10.0, 90.0)),
+                vertex(10.0, 100.0),
+                vertex(90.0, 100.0, round_=True, center=(90.0, 90.0)),
+                vertex(100.0, 90.0),
+                vertex(100.0, 10.0, round_=True, center=(90.0, 10.0)),
+                vertex(90.0, 0.0),
+                vertex(10.0, 0.0, round_=True, center=(10.0, 10.0)),
+                vertex(0.0, 10.0),
+            ]
+        )
+
+        self.assertEqual(
+            values,
+            [
+                "(0,10)",
+                [10.0, 0.0, 10.0, 10.0, "Y"],
+                "(90,0)",
+                [100.0, 10.0, 90.0, 10.0, "Y"],
+                "(100,90)",
+                [90.0, 100.0, 90.0, 90.0, "Y"],
+                "(10,100)",
+                [0.0, 90.0, 10.0, 90.0, "Y"],
+                "(0,10)",
+            ],
+        )
+
+    def test_altium_polygon_path_interleaves_round_vertices(self) -> None:
+        from aurora_translator.semantic.adapters.altium import _vertex_path_values
+        from aurora_translator.sources.altium.models import AltiumVertex
+
+        def vertex(
+            x: float,
+            y: float,
+            *,
+            round_: bool = False,
+            center: tuple[float, float] | None = None,
+            start_angle: float = 0.0,
+            end_angle: float = 0.0,
+        ) -> AltiumVertex:
+            payload: dict[str, object] = {
+                "is_round": round_,
+                "radius": 10.0 if round_ else 0.0,
+                "start_angle": start_angle,
+                "end_angle": end_angle,
+                "position": {
+                    "x_raw": int(x * 10000),
+                    "y_raw": int(-y * 10000),
+                    "x": x,
+                    "y": -y,
+                },
+                "center": None,
+            }
+            if center is not None:
+                cx, cy = center
+                payload["center"] = {
+                    "x_raw": int(cx * 10000),
+                    "y_raw": int(-cy * 10000),
+                    "x": cx,
+                    "y": -cy,
+                }
+            return AltiumVertex.model_validate(payload)
+
+        values = _vertex_path_values(
+            [
+                vertex(
+                    10.0,
+                    0.0,
+                    round_=True,
+                    center=(10.0, 10.0),
+                    start_angle=180.0,
+                    end_angle=270.0,
+                ),
+                vertex(0.0, 10.0),
+                vertex(0.0, 20.0),
+            ]
+        )
+
+        self.assertEqual(values, [[10.0, 0.0], [0.0, 10.0, 10.0, 10.0, 0], [0.0, 20.0]])
 
     def test_altium_adapter_uses_board_stackup_chain_for_copper_layers(self) -> None:
         from aurora_translator.semantic.adapters.altium import from_altium

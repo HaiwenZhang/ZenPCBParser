@@ -8,6 +8,10 @@
 
 [English](#en) | [返回顶部](#top)
 
+## 0.7.18
+
+- Altium -> SemanticBoard 现在按 KiCad C++ importer 的分工同时解析 `ShapeBasedRegions6` 和 legacy `Regions6`：独立 shape-based copper region 会导出为铜皮，带 polygon id 的 filled region 由 `Regions6` 导出并从引用的 polygon pour 继承真实 net，避免内层 polygon-with-holes 被归到 `NoNet` 或重复导出。shape-based region holes 按 Altium double 坐标读取，Top / Bottom Solder pad 会映射到对应 top / bottom 金属层，避免 metal-only AuroraDB 输出引用非金属 pad layer。Semantic JSON schema 保持 `0.7.2`。
+
 ## 0.7.17
 
 - Altium -> SemanticBoard 现在会把 PcbDoc 坐标归一到 AuroraDB/ODB++ 使用的 Y 轴方向，并过滤 `2147483647` 这类无效坐标哨兵，避免 region / polygon 金属层几何写出 `214748.3647 mil` 级别的异常顶点。Semantic JSON schema 保持 `0.7.2`。
@@ -448,6 +452,10 @@
 ## English
 
 [中文](#zh) | [Back to top](#top)
+
+## 0.7.18
+
+- Altium -> SemanticBoard now follows the KiCad C++ importer split by parsing both `ShapeBasedRegions6` and legacy `Regions6`: standalone shape-based copper regions are exported as copper, filled regions with polygon ids are exported from `Regions6` and inherit the real net from the referenced polygon pour, preventing inner-layer polygon-with-holes from being assigned to `NoNet` or exported twice. Shape-based region holes are read as Altium double coordinates, and Top / Bottom Solder pads map to the corresponding top / bottom metal layer so metal-only AuroraDB output does not reference non-metal pad layers. Semantic JSON schema remains `0.7.2`.
 
 ## 0.7.17
 

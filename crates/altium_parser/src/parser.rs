@@ -10,8 +10,8 @@ mod reader;
 mod strings;
 
 use self::binary_records::{
-    parse_arc_record, parse_binary_records, parse_fill_record, parse_pad_record,
-    parse_region_record, parse_text_record, parse_track_record, parse_via_record,
+    parse_arc_record, parse_binary_records, parse_binary_records_lossy, parse_fill_record,
+    parse_pad_record, parse_region_record, parse_text_record, parse_track_record, parse_via_record,
     parse_wide_string_table,
 };
 use self::cfb::CompoundFile;
@@ -261,9 +261,23 @@ pub fn parse_altium_bytes(
     }
 
     let mut regions = Vec::new();
+    if let Some(data) = compound.find_stream("ShapeBasedRegions6") {
+        let (parsed, error) = parse_binary_records_lossy(data, |reader, index| {
+            parse_region_record(reader, index, true, &layer_names)
+        });
+        if !parsed.is_empty() {
+            parsed_stream_count += 1;
+            regions.extend(parsed);
+            mark_stream_parsed(&mut stream_summaries, "ShapeBasedRegions6");
+        }
+        if let Some(error) = error {
+            diagnostics.push(format!("ShapeBasedRegions6 parse failed: {error}"));
+        }
+    }
     if let Some(data) = compound.find_stream("Regions6") {
+        let base_index = regions.len();
         match parse_binary_records(data, |reader, index| {
-            parse_region_record(reader, index, false, &layer_names)
+            parse_region_record(reader, index + base_index, false, &layer_names)
         }) {
             Ok(parsed) => {
                 parsed_stream_count += 1;
@@ -271,18 +285,6 @@ pub fn parse_altium_bytes(
                 mark_stream_parsed(&mut stream_summaries, "Regions6");
             }
             Err(error) => diagnostics.push(format!("Regions6 parse failed: {error}")),
-        }
-    }
-    if let Some(data) = compound.find_stream("ShapeBasedRegions6") {
-        match parse_binary_records(data, |reader, index| {
-            parse_region_record(reader, index + regions.len(), true, &layer_names)
-        }) {
-            Ok(parsed) => {
-                parsed_stream_count += 1;
-                regions.extend(parsed);
-                mark_stream_parsed(&mut stream_summaries, "ShapeBasedRegions6");
-            }
-            Err(error) => diagnostics.push(format!("ShapeBasedRegions6 parse failed: {error}")),
         }
     }
     if let Some(data) = compound.find_stream("BoardRegions") {

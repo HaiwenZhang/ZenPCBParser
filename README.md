@@ -218,7 +218,7 @@ uv run python .\main.py convert --from odbpp --to auroradb <odbpp-dir-or-archive
 - BRD JSON schema version: `0.5.0`
 - ALG parser version: `0.1.1`
 - ALG JSON schema version: `0.2.0`
-- Semantic parser version: `0.7.17`
+- Semantic parser version: `0.7.18`
 - Semantic JSON schema version: `0.7.2`
 
 <a id="en"></a>
@@ -436,5 +436,5 @@ Current versions:
 - BRD JSON schema version: `0.5.0`
 - ALG parser version: `0.1.1`
 - ALG JSON schema version: `0.2.0`
-- Semantic parser version: `0.7.17`
+- Semantic parser version: `0.7.18`
 - Semantic JSON schema version: `0.7.2`

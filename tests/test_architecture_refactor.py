@@ -140,6 +140,13 @@ class ArchitectureRefactorTests(unittest.TestCase):
         )
         self.assertEqual(point_parts[1][-1], "Y")
 
+        mixed_parts = _polygon_vertex_parts_from_raw_points(
+            [[0, 0], [10, 0, 0, 0, "N"], [10, 10]], source_unit="mil"
+        )
+        self.assertEqual(
+            mixed_parts, [["0", "0"], ["10", "0", "0", "0", "N"], ["10", "10"]]
+        )
+
         arc_parts = _polygon_vertex_parts_from_arcs(
             [{"start": [0, 0], "end": [10, 0], "height": -5}],
             source_unit="mil",

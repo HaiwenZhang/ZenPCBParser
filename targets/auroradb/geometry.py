@@ -657,6 +657,11 @@ def _polygon_vertex_parts_from_raw_points(
 ) -> list[list[str]]:
     if not isinstance(raw_points, (list, tuple)):
         return []
+    explicit_parts = _polygon_vertex_parts_from_explicit_raw_path(
+        raw_points, source_unit=source_unit
+    )
+    if explicit_parts:
+        return explicit_parts
     items = _trace_point_items(raw_points, source_unit=source_unit)
     if not items:
         return []
@@ -706,6 +711,47 @@ def _polygon_vertex_parts_from_raw_points(
     if len(parts) >= 2 and parts[0] == parts[-1]:
         parts.pop()
     return parts
+
+
+def _polygon_vertex_parts_from_explicit_raw_path(
+    raw_points: list[Any], *, source_unit: str | None
+) -> list[list[str]]:
+    has_explicit_arc = False
+    parts: list[list[str]] = []
+    for raw_point in raw_points:
+        arc_parts = _explicit_polygon_arc_parts(raw_point, source_unit=source_unit)
+        if arc_parts is not None:
+            has_explicit_arc = True
+            if parts:
+                parts.append(arc_parts)
+            continue
+        point = _point_tuple(raw_point, source_unit=source_unit)
+        if point is not None:
+            parts.append(_polygon_point_parts(point))
+    if not has_explicit_arc:
+        return []
+    if len(parts) >= 2 and parts[0] == parts[-1]:
+        parts.pop()
+    return parts
+
+
+def _explicit_polygon_arc_parts(
+    value: Any, *, source_unit: str | None
+) -> list[str] | None:
+    if not isinstance(value, (list, tuple)) or len(value) != 5:
+        return None
+    parsed = [_length_to_mil(part, source_unit=source_unit) for part in value[:4]]
+    if not all(part is not None and _is_finite(part) for part in parsed):
+        return None
+    end_x, end_y, center_x, center_y = [float(part) for part in parsed]
+    flag = value[4]
+    if isinstance(flag, bool):
+        direction = _bool_aaf(flag)
+    elif isinstance(flag, (int, float)) and flag in {0, 1}:
+        direction = "Y" if flag else "N"
+    else:
+        direction = str(flag)
+    return _polygon_arc_parts((end_x, end_y), (center_x, center_y), direction)
 
 
 def _polygon_points(

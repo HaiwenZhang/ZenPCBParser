@@ -27,6 +27,33 @@ where
     Ok(records)
 }
 
+pub(crate) fn parse_binary_records_lossy<T, F>(
+    bytes: &[u8],
+    mut parse: F,
+) -> (Vec<T>, Option<AltiumParseError>)
+where
+    F: FnMut(&mut BinaryReader<'_>, usize) -> Result<T, AltiumParseError>,
+{
+    let mut reader = BinaryReader::new(bytes);
+    let mut records = Vec::new();
+    while reader.remaining() >= 5 {
+        let start = reader.position();
+        match parse(&mut reader, records.len()) {
+            Ok(record) => records.push(record),
+            Err(error) => return (records, Some(error)),
+        }
+        if reader.position() <= start {
+            return (
+                records,
+                Some(AltiumParseError::Invalid(
+                    "binary record parser made no progress".to_string(),
+                )),
+            );
+        }
+    }
+    (records, None)
+}
+
 pub(crate) fn parse_pad_record(
     reader: &mut BinaryReader<'_>,
     index: usize,
@@ -432,24 +459,29 @@ pub(crate) fn parse_region_record(
     let layer_id = versioned_layer(layer_v6, layer_v7);
     let raw_kind = prop_i32(&properties, "KIND", 0);
     let is_board_cutout = prop_bool(&properties, "ISBOARDCUTOUT", false);
-    let is_shape_based = prop_bool(&properties, "ISSHAPEBASED", extended_vertices);
+    let is_shape_based = extended_vertices;
     let kind = region_kind_name(raw_kind, is_board_cutout).to_string();
     let keepout_restrictions = prop_u8(&properties, "KEEPOUTRESTRIC", 0x1F);
     let subpolygon = prop_u16(&properties, "SUBPOLYINDEX", ALTIUM_POLYGON_NONE);
-    let mut outline_count = reader.u32()? as usize;
-    if extended_vertices {
-        outline_count = outline_count.saturating_add(1);
-    }
+    let outline_count = reader.u32()? as usize;
+    let outline_count = if extended_vertices {
+        outline_count.saturating_add(1)
+    } else {
+        outline_count
+    };
     let mut outline = Vec::with_capacity(outline_count);
     for _ in 0..outline_count {
         outline.push(read_region_vertex(reader, extended_vertices)?);
     }
     let mut holes = Vec::with_capacity(hole_count as usize);
     for _ in 0..hole_count {
+        if reader.remaining_subrecord_bytes() < 4 {
+            break;
+        }
         let hole_vertices = reader.u32()? as usize;
         let mut hole = Vec::with_capacity(hole_vertices);
         for _ in 0..hole_vertices {
-            hole.push(read_region_vertex(reader, extended_vertices)?);
+            hole.push(read_region_double_vertex(reader)?);
         }
         holes.push(hole);
     }
@@ -482,7 +514,11 @@ fn read_region_vertex(
         let center = reader.point()?;
         let radius = coord_to_mil_i32(reader.i32()?);
         let start_angle = reader.f64()?;
-        let end_angle = reader.f64()?;
+        let end_angle = if reader.remaining_subrecord_bytes() >= 8 {
+            reader.f64()?
+        } else {
+            start_angle
+        };
         Ok(Vertex {
             is_round,
             radius,
@@ -492,17 +528,21 @@ fn read_region_vertex(
             center: Some(center),
         })
     } else {
-        let x = double_coord_to_raw(reader.f64()?);
-        let y = double_coord_to_raw(reader.f64()?);
-        Ok(Vertex {
-            is_round: false,
-            radius: 0.0,
-            start_angle: 0.0,
-            end_angle: 0.0,
-            position: point_from_raw(x, y),
-            center: None,
-        })
+        read_region_double_vertex(reader)
     }
+}
+
+fn read_region_double_vertex(reader: &mut BinaryReader<'_>) -> Result<Vertex, AltiumParseError> {
+    let x = double_coord_to_raw(reader.f64()?);
+    let y = double_coord_to_raw(reader.f64()?);
+    Ok(Vertex {
+        is_round: false,
+        radius: 0.0,
+        start_angle: 0.0,
+        end_angle: 0.0,
+        position: point_from_raw(x, y),
+        center: None,
+    })
 }
 
 pub(crate) fn parse_text_record(
@@ -637,6 +677,132 @@ mod tests {
         out.extend_from_slice(&(data.len() as u32).to_le_bytes());
         out.extend_from_slice(data);
         out
+    }
+
+    fn region_body(
+        layer: u8,
+        net: u16,
+        polygon: u16,
+        hole_count: u16,
+        properties: &[u8],
+    ) -> Vec<u8> {
+        let mut body = Vec::new();
+        body.push(layer);
+        body.push(0);
+        body.push(0);
+        body.extend_from_slice(&net.to_le_bytes());
+        body.extend_from_slice(&polygon.to_le_bytes());
+        body.extend_from_slice(&65535u16.to_le_bytes());
+        body.extend_from_slice(&[0; 5]);
+        body.extend_from_slice(&hole_count.to_le_bytes());
+        body.extend_from_slice(&[0; 2]);
+        body.extend_from_slice(&(properties.len() as u32).to_le_bytes());
+        body.extend_from_slice(properties);
+        body
+    }
+
+    fn shape_region_vertex(x: i32, y: i32) -> Vec<u8> {
+        let mut body = Vec::new();
+        body.push(0);
+        body.extend_from_slice(&x.to_le_bytes());
+        body.extend_from_slice(&y.to_le_bytes());
+        body.extend_from_slice(&0i32.to_le_bytes());
+        body.extend_from_slice(&0i32.to_le_bytes());
+        body.extend_from_slice(&0i32.to_le_bytes());
+        body.extend_from_slice(&0.0f64.to_le_bytes());
+        body.extend_from_slice(&0.0f64.to_le_bytes());
+        body
+    }
+
+    #[test]
+    fn parses_region_double_coordinates_as_raw_internal_units() {
+        let mut record = vec![11];
+        let mut body = region_body(2, 7, 9, 0, b"V7_LAYER=MID1|KIND=0|");
+        body.extend_from_slice(&3u32.to_le_bytes());
+        for (x, y) in [(10000.0, 20000.0), (30000.0, 40000.0), (50000.0, 60000.0)] {
+            body.extend_from_slice(&f64::to_le_bytes(x));
+            body.extend_from_slice(&f64::to_le_bytes(y));
+        }
+        record.extend_from_slice(&subrecord(&body));
+
+        let mut reader = BinaryReader::new(&record);
+        let region = parse_region_record(&mut reader, 0, false, &HashMap::new()).unwrap();
+
+        assert_eq!(region.layer_name, "MID1");
+        assert_eq!(region.outline.len(), 3);
+        assert_eq!(region.outline[0].position.x_raw, 10000);
+        assert_eq!(region.outline[0].position.x, 1.0);
+        assert_eq!(region.outline[0].position.y, -2.0);
+    }
+
+    #[test]
+    fn parses_shape_based_region_with_closing_vertex() {
+        let mut record = vec![11];
+        let mut body = region_body(2, 7, 9, 0, b"V7_LAYER=MID1|KIND=0|");
+        body.extend_from_slice(&2u32.to_le_bytes());
+        for (x, y) in [
+            (10000i32, 20000i32),
+            (30000i32, 40000i32),
+            (10000i32, 20000i32),
+        ] {
+            body.extend_from_slice(&shape_region_vertex(x, y));
+        }
+        record.extend_from_slice(&subrecord(&body));
+
+        let mut reader = BinaryReader::new(&record);
+        let region = parse_region_record(&mut reader, 0, true, &HashMap::new()).unwrap();
+
+        assert_eq!(region.outline.len(), 3);
+        assert_eq!(region.outline[1].position.x, 3.0);
+        assert_eq!(reader.remaining(), 0);
+    }
+
+    #[test]
+    fn parses_shape_based_region_holes_as_double_coordinates() {
+        let mut record = vec![11];
+        let mut body = region_body(2, 7, 9, 1, b"V7_LAYER=MID1|KIND=0|");
+        body.extend_from_slice(&2u32.to_le_bytes());
+        for (x, y) in [
+            (10000i32, 20000i32),
+            (30000i32, 40000i32),
+            (10000i32, 20000i32),
+        ] {
+            body.extend_from_slice(&shape_region_vertex(x, y));
+        }
+        body.extend_from_slice(&2u32.to_le_bytes());
+        for (x, y) in [(11000.0, 21000.0), (12000.0, 22000.0)] {
+            body.extend_from_slice(&f64::to_le_bytes(x));
+            body.extend_from_slice(&f64::to_le_bytes(y));
+        }
+        record.extend_from_slice(&subrecord(&body));
+
+        let mut reader = BinaryReader::new(&record);
+        let region = parse_region_record(&mut reader, 0, true, &HashMap::new()).unwrap();
+
+        assert_eq!(region.holes.len(), 1);
+        assert_eq!(region.holes[0].len(), 2);
+        assert_eq!(region.holes[0][0].position.x, 1.1);
+        assert_eq!(region.holes[0][0].position.y, -2.1);
+        assert_eq!(reader.remaining(), 0);
+    }
+
+    #[test]
+    fn lossy_binary_records_keep_complete_prefix() {
+        let mut record = vec![11];
+        let mut body = region_body(2, 7, 9, 0, b"V7_LAYER=MID1|KIND=0|");
+        body.extend_from_slice(&1u32.to_le_bytes());
+        body.extend_from_slice(&1.0f64.to_le_bytes());
+        body.extend_from_slice(&2.0f64.to_le_bytes());
+        record.extend_from_slice(&subrecord(&body));
+        record.push(11);
+        record.extend_from_slice(&100u32.to_le_bytes());
+
+        let (regions, error) = parse_binary_records_lossy(&record, |reader, index| {
+            parse_region_record(reader, index, false, &HashMap::new())
+        });
+
+        assert_eq!(regions.len(), 1);
+        assert!(error.is_some());
     }
 
     #[test]

@@ -13,7 +13,7 @@
 ## 版本
 
 - 当前项目版本：`1.0.44`
-- 当前 Semantic parser 版本：`0.7.17`
+- 当前 Semantic parser 版本：`0.7.18`
 - 当前 Semantic JSON schema 版本：`0.7.2`
 
 ## 生成方式
@@ -108,7 +108,7 @@ This document describes the current JSON structure emitted by Aurora Translator'
 ## Versions
 
 - Current project version: `1.0.44`
-- Current Semantic parser version: `0.7.17`
+- Current Semantic parser version: `0.7.18`
 - Current Semantic JSON schema version: `0.7.2`
 
 ## Generation

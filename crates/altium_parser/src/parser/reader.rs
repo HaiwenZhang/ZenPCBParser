@@ -24,6 +24,10 @@ impl<'a> BinaryReader<'a> {
         self.data.len().saturating_sub(self.position)
     }
 
+    pub(crate) fn position(&self) -> usize {
+        self.position
+    }
+
     pub(crate) fn remaining_subrecord_bytes(&self) -> usize {
         self.subrecord_end
             .unwrap_or(self.data.len())

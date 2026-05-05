@@ -1,6 +1,4 @@
-use aurora_altium_native::{
-    build_payload, BuildPayloadOptions, BACKEND_CLI, RUST_PARSER_VERSION,
-};
+use aurora_altium_native::{build_payload, BuildPayloadOptions, BACKEND_CLI, RUST_PARSER_VERSION};
 use std::env;
 use std::fs;
 use std::path::PathBuf;

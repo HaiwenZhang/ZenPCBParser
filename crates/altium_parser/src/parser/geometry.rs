@@ -84,7 +84,10 @@ pub(crate) fn coord_to_mil_i32(raw: i32) -> f64 {
 }
 
 pub(crate) fn double_coord_to_raw(value: f64) -> i32 {
-    (value * INTERNAL_COORDS_PER_MIL).round() as i32
+    if !value.is_finite() {
+        return 0;
+    }
+    value.round().clamp(i32::MIN as f64, i32::MAX as f64) as i32
 }
 
 pub(crate) fn parse_unit_mil(value: &str) -> Option<f64> {

@@ -60,6 +60,7 @@ from aurora_translator.sources.altium.models import (
 
 ALTIUM_UNCONNECTED_INDEXES = {65535, 4294967295}
 ALTIUM_NO_COMPONENT_INDEXES = {65535, 4294967295}
+ALTIUM_POLYGON_NONE = 65535
 COPPER_MATERIAL_ID = semantic_id("material", "Copper")
 DEFAULT_PAD_SIZE_MIL = 10.0
 DEFAULT_VIA_DIAMETER_MIL = 16.0
@@ -398,20 +399,41 @@ def _component_part_name(
 
 
 def _component_designators_by_index(payload: AltiumLayout) -> dict[int, str]:
+    result = _component_designator_texts_by_index(payload)
     components = list(payload.components or [])
     if not components:
-        return {}
+        return result
     component_class = _component_designator_class(
         payload.classes or [], len(components)
     )
     if component_class is None:
-        return {}
-    result: dict[int, str] = {}
+        return result
     for component, member in zip(components, component_class.members, strict=False):
         designator = member.strip()
         if designator:
-            result[component.index] = designator
+            result.setdefault(component.index, designator)
     return result
+
+
+def _component_designator_texts_by_index(payload: AltiumLayout) -> dict[int, str]:
+    result: dict[int, str] = {}
+    for text in sorted(payload.texts or [], key=lambda item: item.index):
+        component_index = text.component
+        if component_index in ALTIUM_UNCONNECTED_INDEXES or component_index in result:
+            continue
+        value = _component_designator_text(text)
+        if value:
+            result[component_index] = value
+    return result
+
+
+def _component_designator_text(text: AltiumText) -> str | None:
+    if not text.is_designator:
+        return None
+    value = text.text.strip()
+    if not value or value.casefold() == ".designator":
+        return None
+    return value
 
 
 def _component_designator_class(
@@ -447,7 +469,7 @@ def _component_comment_text(text: AltiumText) -> str | None:
     if not text.is_comment:
         return None
     value = text.text.strip()
-    if not value or value.casefold() == ".designator":
+    if not value or value.casefold() in {".designator", ".comment", "comment"}:
         return None
     return value
 
@@ -649,31 +671,76 @@ def _semantic_primitives(
     component_ids_by_index: dict[int, str],
 ) -> list[SemanticPrimitive]:
     primitives: list[SemanticPrimitive] = []
+    polygon_net_indexes_by_index = {
+        polygon.index: polygon.net for polygon in payload.polygons or []
+    }
+    layer_names_by_id = _semantic_layer_names_by_id(payload)
 
     for index, track in enumerate(payload.tracks or []):
+        if not _is_copper_primitive_layer(
+            track.layer_id, track.layer_name, layer_names_by_id
+        ):
+            continue
         primitive = _track_primitive(
-            track, index, net_ids_by_index, component_ids_by_index
+            track,
+            index,
+            net_ids_by_index,
+            component_ids_by_index,
+            layer_names_by_id,
         )
         _append_primitive(primitive, primitives, nets_by_id)
 
     for index, arc in enumerate(payload.arcs or []):
-        primitive = _arc_primitive(arc, index, net_ids_by_index, component_ids_by_index)
+        if not _is_copper_primitive_layer(
+            arc.layer_id, arc.layer_name, layer_names_by_id
+        ):
+            continue
+        primitive = _arc_primitive(
+            arc,
+            index,
+            net_ids_by_index,
+            component_ids_by_index,
+            layer_names_by_id,
+        )
         _append_primitive(primitive, primitives, nets_by_id)
 
     for index, fill in enumerate(payload.fills or []):
+        if not _is_copper_primitive_layer(
+            fill.layer_id, fill.layer_name, layer_names_by_id
+        ):
+            continue
         primitive = _fill_primitive(
-            fill, index, net_ids_by_index, component_ids_by_index
+            fill,
+            index,
+            net_ids_by_index,
+            component_ids_by_index,
+            layer_names_by_id,
         )
         _append_primitive(primitive, primitives, nets_by_id)
 
     for index, region in enumerate(payload.regions or []):
+        if not _is_copper_primitive_layer(
+            region.layer_id, region.layer_name, layer_names_by_id
+        ):
+            continue
         primitive = _region_primitive(
-            region, index, net_ids_by_index, component_ids_by_index
+            region,
+            index,
+            net_ids_by_index,
+            component_ids_by_index,
+            polygon_net_indexes_by_index,
+            layer_names_by_id,
         )
         _append_primitive(primitive, primitives, nets_by_id)
 
     for index, polygon in enumerate(payload.polygons or []):
-        primitive = _polygon_primitive(polygon, index, net_ids_by_index)
+        if not _is_copper_primitive_layer(
+            polygon.layer_id, polygon.layer_name, layer_names_by_id
+        ):
+            continue
+        primitive = _polygon_primitive(
+            polygon, index, net_ids_by_index, layer_names_by_id
+        )
         _append_primitive(primitive, primitives, nets_by_id)
 
     return primitives
@@ -696,13 +763,16 @@ def _track_primitive(
     index: int,
     net_ids_by_index: dict[int, str],
     component_ids_by_index: dict[int, str],
+    layer_names_by_id: dict[int, str] | None = None,
 ) -> SemanticPrimitive | None:
     if not _is_valid_point(track.start) or not _is_valid_point(track.end):
         return None
     return SemanticPrimitive(
         id=semantic_id("primitive", f"track:{track.index}"),
         kind="keepout" if track.is_keepout else "trace",
-        layer_name=track.layer_name,
+        layer_name=_canonical_layer_name(
+            track.layer_id, track.layer_name, layer_names_by_id
+        ),
         net_id=None if track.is_keepout else _net_id(track.net, net_ids_by_index),
         component_id=_component_id(track.component, component_ids_by_index),
         geometry=SemanticPrimitiveGeometry(
@@ -723,6 +793,7 @@ def _arc_primitive(
     index: int,
     net_ids_by_index: dict[int, str],
     component_ids_by_index: dict[int, str],
+    layer_names_by_id: dict[int, str] | None = None,
 ) -> SemanticPrimitive | None:
     geometry = _arc_geometry(arc.center, arc.radius, arc.start_angle, arc.end_angle)
     if geometry is None:
@@ -730,7 +801,9 @@ def _arc_primitive(
     return SemanticPrimitive(
         id=semantic_id("primitive", f"arc:{arc.index}"),
         kind="keepout" if arc.is_keepout else "arc",
-        layer_name=arc.layer_name,
+        layer_name=_canonical_layer_name(
+            arc.layer_id, arc.layer_name, layer_names_by_id
+        ),
         net_id=None if arc.is_keepout else _net_id(arc.net, net_ids_by_index),
         component_id=_component_id(arc.component, component_ids_by_index),
         geometry=SemanticPrimitiveGeometry(
@@ -753,6 +826,7 @@ def _fill_primitive(
     index: int,
     net_ids_by_index: dict[int, str],
     component_ids_by_index: dict[int, str],
+    layer_names_by_id: dict[int, str] | None = None,
 ) -> SemanticPrimitive | None:
     raw_points = _rotated_rectangle_points(
         fill.position1, fill.position2, fill.rotation
@@ -762,7 +836,9 @@ def _fill_primitive(
     return SemanticPrimitive(
         id=semantic_id("primitive", f"fill:{fill.index}"),
         kind="keepout" if fill.is_keepout else "polygon",
-        layer_name=fill.layer_name,
+        layer_name=_canonical_layer_name(
+            fill.layer_id, fill.layer_name, layer_names_by_id
+        ),
         net_id=None if fill.is_keepout else _net_id(fill.net, net_ids_by_index),
         component_id=_component_id(fill.component, component_ids_by_index),
         geometry=SemanticPrimitiveGeometry(
@@ -780,14 +856,22 @@ def _region_primitive(
     index: int,
     net_ids_by_index: dict[int, str],
     component_ids_by_index: dict[int, str],
+    polygon_net_indexes_by_index: dict[int, int],
+    layer_names_by_id: dict[int, str] | None = None,
 ) -> SemanticPrimitive | None:
-    raw_points = _vertex_points(region.outline)
-    if len(raw_points) < 2:
+    if region.kind == "polygon_cutout":
+        return None
+    if region.is_shape_based:
+        if region.polygon != ALTIUM_POLYGON_NONE:
+            return None
+    elif region.polygon == ALTIUM_POLYGON_NONE:
+        return None
+    outline_points = _vertex_points(region.outline)
+    if len(outline_points) < 2:
         return None
     voids = [
         SemanticPolygonVoidGeometry(
-            raw_points=_vertex_points(hole),
-            arcs=_vertex_arcs(hole),
+            raw_points=_vertex_path_values(hole),
             source_contour_index=hole_index,
         )
         for hole_index, hole in enumerate(region.holes)
@@ -796,41 +880,57 @@ def _region_primitive(
     return SemanticPrimitive(
         id=semantic_id("primitive", f"region:{region.index}"),
         kind="keepout" if region.is_keepout else "polygon",
-        layer_name=region.layer_name,
-        net_id=None if region.is_keepout else _net_id(region.net, net_ids_by_index),
+        layer_name=_canonical_layer_name(
+            region.layer_id, region.layer_name, layer_names_by_id
+        ),
+        net_id=None
+        if region.is_keepout
+        else _region_net_id(region, net_ids_by_index, polygon_net_indexes_by_index),
         component_id=_component_id(region.component, component_ids_by_index),
         geometry=SemanticPrimitiveGeometry(
             record_kind="REGION",
-            raw_points=raw_points,
-            arcs=_vertex_arcs(region.outline),
+            raw_points=_vertex_path_values(region.outline),
             voids=voids,
             has_voids=bool(voids),
             feature_id=region.polygon,
-            bbox=_bbox(raw_points),
+            bbox=_bbox(outline_points),
         ),
         source=source_ref("altium", f"regions[{index}]", region.index),
     )
+
+
+def _region_net_id(
+    region: AltiumRegion,
+    net_ids_by_index: dict[int, str],
+    polygon_net_indexes_by_index: dict[int, int],
+) -> str | None:
+    net_index = region.net
+    if _is_unconnected_net(net_index):
+        net_index = polygon_net_indexes_by_index.get(region.polygon, net_index)
+    return _net_id(net_index, net_ids_by_index)
 
 
 def _polygon_primitive(
     polygon: AltiumPolygon,
     index: int,
     net_ids_by_index: dict[int, str],
+    layer_names_by_id: dict[int, str] | None = None,
 ) -> SemanticPrimitive | None:
-    raw_points = _vertex_points(polygon.vertices)
-    if len(raw_points) < 2:
+    outline_points = _vertex_points(polygon.vertices)
+    if len(outline_points) < 2:
         return None
     return SemanticPrimitive(
         id=semantic_id("primitive", f"polygon:{polygon.index}"),
         kind="polygon",
-        layer_name=polygon.layer_name,
+        layer_name=_canonical_layer_name(
+            polygon.layer_id, polygon.layer_name, layer_names_by_id
+        ),
         net_id=_net_id(polygon.net, net_ids_by_index),
         geometry=SemanticPrimitiveGeometry(
             record_kind="POLYGON",
-            raw_points=raw_points,
-            arcs=_vertex_arcs(polygon.vertices),
+            raw_points=_vertex_path_values(polygon.vertices),
             feature_id=polygon.pour_index,
-            bbox=_bbox(raw_points),
+            bbox=_bbox(outline_points),
         ),
         source=source_ref("altium", f"polygons[{index}]", polygon.index),
     )
@@ -839,18 +939,54 @@ def _polygon_primitive(
 def _board_outline(payload: AltiumLayout) -> SemanticBoardOutlineGeometry:
     if payload.board is None or not payload.board.outline:
         return SemanticBoardOutlineGeometry()
-    values = [
-        _point_tuple_value(point) for point in _vertex_points(payload.board.outline)
-    ]
+    values = _board_outline_values(payload.board.outline)
     if len(values) < 2:
         return SemanticBoardOutlineGeometry()
     return SemanticBoardOutlineGeometry(
         kind="polygon",
         auroradb_type="Polygon",
         source="altium_board_outline",
-        path_count=len(payload.board.outline),
+        path_count=len(values),
         values=[len(values), *values, "Y", "Y"],
     )
+
+
+def _board_outline_values(vertices: list[AltiumVertex]) -> list[object]:
+    if not any(vertex.is_round and vertex.center is not None for vertex in vertices):
+        return [_point_tuple_value(point) for point in _vertex_points(vertices)]
+
+    start_vertex = next(
+        (vertex for vertex in vertices if _is_valid_point(vertex.position)), None
+    )
+    if start_vertex is None:
+        return []
+    closed = (
+        len(vertices) > 1
+        and _is_valid_point(vertices[-1].position)
+        and _same_point(
+            _point_values(start_vertex.position),
+            _point_values(vertices[-1].position),
+        )
+    )
+    middle_vertices = vertices[1:-1] if closed else vertices[1:]
+    values: list[object] = [_point_tuple_value(_point_values(start_vertex.position))]
+    for vertex in reversed(middle_vertices):
+        value = _board_outline_vertex_value(vertex)
+        if value is not None:
+            values.append(value)
+    if closed:
+        values.append(_point_tuple_value(_point_values(start_vertex.position)))
+    return values
+
+
+def _board_outline_vertex_value(vertex: AltiumVertex) -> object | None:
+    if not _is_valid_point(vertex.position):
+        return None
+    if vertex.is_round and vertex.center is not None and _is_valid_point(vertex.center):
+        end_x, end_y = _point_values(vertex.position)
+        center_x, center_y = _point_values(vertex.center)
+        return [end_x, end_y, center_x, center_y, "Y"]
+    return _point_tuple_value(_point_values(vertex.position))
 
 
 def _shape_id_for_size(
@@ -952,6 +1088,12 @@ def _pad_layer_name(
 ) -> str | None:
     text = pad.layer_name
     if text and "multi" not in text.casefold():
+        if "solder" in text.casefold():
+            side = side_from_layer_name(text)
+            if side == "bottom":
+                return bottom_layer or text
+            if side == "top":
+                return top_layer or text
         return text
     if component_id is not None:
         component = components_by_id.get(component_id)
@@ -1096,6 +1238,38 @@ def _vertex_points(vertices: Iterable[AltiumVertex]) -> list[list[float]]:
     ]
 
 
+def _vertex_path_values(vertices: Iterable[AltiumVertex]) -> list[object]:
+    items = list(vertices)
+    if not items:
+        return []
+
+    values: list[object] = []
+    for index, vertex in enumerate(items):
+        if not _is_valid_point(vertex.position):
+            continue
+        if not values:
+            values.append(_point_values(vertex.position))
+            continue
+        previous = items[index - 1]
+        if (
+            previous.is_round
+            and previous.center is not None
+            and _is_valid_point(previous.center)
+        ):
+            end_x, end_y = _point_values(vertex.position)
+            center_x, center_y = _point_values(previous.center)
+            direction = _vertex_arc_direction(previous)
+            values.append([end_x, end_y, center_x, center_y, direction])
+        else:
+            values.append(_point_values(vertex.position))
+    return values
+
+
+def _vertex_arc_direction(vertex: AltiumVertex) -> int:
+    span = (vertex.end_angle - vertex.start_angle) % 360.0
+    return 0 if span > 0.0 else 1
+
+
 def _point_tuple_value(point: list[float]) -> str:
     return f"({point[0]:.12g},{point[1]:.12g})"
 
@@ -1164,6 +1338,10 @@ def _point(point: AltiumPoint) -> SemanticPoint:
 
 def _point_values(point: AltiumPoint) -> list[float]:
     return [_clean_coordinate(point.x), _clean_coordinate(-point.y)]
+
+
+def _same_point(first: list[float], second: list[float]) -> bool:
+    return abs(first[0] - second[0]) < 1e-9 and abs(first[1] - second[1]) < 1e-9
 
 
 def _is_valid_point(point: AltiumPoint) -> bool:
@@ -1251,6 +1429,36 @@ def _source_stackup_copper_layer_items(
     if stackup and stackup[-1][1].layer_id == 32:
         return stackup
     return []
+
+
+def _semantic_layer_names_by_id(payload: AltiumLayout) -> dict[int, str]:
+    source_layers = _source_stackup_copper_layer_items(payload.layers or [])
+    if not source_layers:
+        source_layers = [
+            (index, layer)
+            for index, layer in enumerate(payload.layers or [])
+            if _is_source_fallback_copper_layer(layer)
+        ]
+    return {layer.layer_id: _layer_name(layer) for _index, layer in source_layers}
+
+
+def _canonical_layer_name(
+    layer_id: int, layer_name: str, layer_names_by_id: dict[int, str] | None
+) -> str:
+    if layer_names_by_id is None:
+        return layer_name
+    return layer_names_by_id.get(layer_id, layer_name)
+
+
+def _is_copper_primitive_layer(
+    layer_id: int, layer_name: str, layer_names_by_id: dict[int, str]
+) -> bool:
+    if not layer_names_by_id:
+        return True
+    if layer_id in layer_names_by_id:
+        return True
+    copper_names = {name.casefold() for name in layer_names_by_id.values()}
+    return layer_name.casefold() in copper_names
 
 
 def _is_source_stackup_copper_layer(layer: AltiumLayer) -> bool:
