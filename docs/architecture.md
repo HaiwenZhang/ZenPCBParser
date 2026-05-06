@@ -129,6 +129,7 @@ flowchart LR
 - `AEDBLayout.model_json_schema()` 生成机器可读 schema。
 - `crates/aedb_parser/` 目前提供 `parse`、`roundtrip` 和 `compare-auroradb` CLI：`parse` 输出 `.def` record / DSL / domain 摘要，包含 binary padstack instance、drill diameter、raw-point path、native polygon/void 和 Line/Larc segment 统计；`roundtrip` 从解析后的 record stream 写回 `.def`；`compare-auroradb` 将 `.def` domain 抽取结果与标准 AuroraDB 目录做名称和计数对照。
 - Python CLI 通过显式 `--aedb-backend def-binary` 接入该 Rust parser；默认 `--aedb-backend pyedb` 行为不变，`def-binary` 支持 `inspect source`、`dump source-json`，以及 `convert --from aedb --aedb-backend def-binary --to auroradb` 的端到端输出。
+- AEDB `.def` binary record、text DSL、path、padstack instance、polygon/void 和 AuroraDB 映射的详细说明见：[sources/aedb/docs/DEF_BINARY_FORMAT.md](../sources/aedb/docs/DEF_BINARY_FORMAT.md)。
 - `convert --from aedb --to auroradb` 在未请求 `--source-output` / `--semantic-output` 时会自动使用 `auroradb-minimal` 解析 profile，只保存 AuroraDB 导出必需字段和运行时私有几何缓存，减少 path / polygon 解析时间。
 - 显式导出 AEDB JSON 或 Semantic JSON 时始终使用完整 `full` profile；也可以用 `--aedb-parse-profile full` 强制关闭自动最小化解析。
 
@@ -210,6 +211,8 @@ flowchart LR
 
 当前 BRD parser 覆盖 header、string table、linked-list metadata、layer list、net、padstack component 几何表、footprint、placed pad、via、track、segment、shape、keepout、text 和 block summary。`semantic.adapters.brd` 会把物理 ETCH layer、net、padstack pad/barrel 形状、placed pad bbox、component / pin / footprint、padstack via template、via、track/shape segment 链和 keepout void 映射进 `SemanticBoard`，从而支撑 AuroraDB 的走线、铜皮 polygon、偏心 slot via 和 `PolygonHole` 输出。
 
+BRD 二进制读取说明见 [sources/brd/docs/BRD_BINARY_FORMAT.md](../sources/brd/docs/BRD_BINARY_FORMAT.md)。该文档只覆盖 `.brd -> BRDLayout` 读取和调试，不定义 `AuroraDB -> BRD` 写出方案。
+
 ## ALG 解析链路
 
 Cadence Allegro extracta ALG 解析采用 Rust + Python 双层结构。ALG 输入是由 Cadence extracta 从 `.brd` 导出的文本记录，输出模型为本项目自有的 `ALGLayout` source JSON。
@@ -274,7 +277,7 @@ flowchart LR
 | AEDB | `sources/aedb/docs/aedb_schema.json` | `sources/aedb/docs/aedb_json_schema.md` | `sources/aedb/docs/CHANGELOG.md`、`sources/aedb/docs/SCHEMA_CHANGELOG.md` |
 | AuroraDB | `sources/auroradb/docs/auroradb_schema.json` | `sources/auroradb/docs/auroradb_json_schema.md` | `sources/auroradb/docs/CHANGELOG.md`、`sources/auroradb/docs/SCHEMA_CHANGELOG.md` |
 | ODB++ | `sources/odbpp/docs/odbpp_schema.json` | `sources/odbpp/docs/odbpp_json_schema.md` | `sources/odbpp/docs/CHANGELOG.md`、`sources/odbpp/docs/SCHEMA_CHANGELOG.md` |
-| BRD | 通过 `main.py schema --format brd` 生成 | 暂无长期字段说明 | 项目级 `docs/CHANGELOG.md` |
+| BRD | 通过 `main.py schema --format brd` 生成 | `sources/brd/docs/BRD_BINARY_FORMAT.md` | 项目级 `docs/CHANGELOG.md` |
 | ALG | 通过 `main.py schema --format alg` 生成 | 暂无长期字段说明 | 项目级 `docs/CHANGELOG.md` |
 | Altium | 通过 `main.py schema --format altium` 生成 | 暂无长期字段说明 | 项目级 `docs/CHANGELOG.md` |
 | Semantic | `semantic/docs/semantic_schema.json` | `semantic/docs/semantic_json_schema.md` | `semantic/docs/CHANGELOG.md`、`semantic/docs/SCHEMA_CHANGELOG.md` |
@@ -526,6 +529,7 @@ Key points:
 - `AEDBLayout.model_json_schema()` generates the machine-readable schema.
 - `crates/aedb_parser/` currently exposes `parse`, `roundtrip`, and `compare-auroradb` CLI commands: `parse` writes `.def` record / DSL / domain summaries, including binary padstack instances, drill diameters, raw-point paths, native polygon/void records, and Line/Larc segment statistics; `roundtrip` writes `.def` from the parsed record stream; and `compare-auroradb` compares `.def` domain extraction against a standard AuroraDB directory.
 - The Python CLI integrates this Rust parser only through explicit `--aedb-backend def-binary`; the default `--aedb-backend pyedb` behavior is unchanged, and `def-binary` supports `inspect source`, `dump source-json`, and end-to-end `convert --from aedb --aedb-backend def-binary --to auroradb`.
+- Detailed AEDB `.def` binary record, text DSL, path, padstack instance, polygon/void, and AuroraDB mapping notes live in [sources/aedb/docs/DEF_BINARY_FORMAT.md](../sources/aedb/docs/DEF_BINARY_FORMAT.md).
 - `convert --from aedb --to auroradb` automatically uses the `auroradb-minimal` parse profile when neither `--source-output` nor `--semantic-output` is requested; it keeps only fields and runtime-private geometry caches required by AuroraDB export to reduce path / polygon parse time.
 - Explicit AEDB JSON or Semantic JSON export always uses the complete `full` profile. Pass `--aedb-parse-profile full` to force full parsing on direct AuroraDB conversion.
 
@@ -607,6 +611,8 @@ flowchart LR
 
 The current BRD parser covers headers, string tables, linked-list metadata, layer lists, nets, padstack component geometry tables, footprints, placed pads, vias, tracks, segments, shapes, keepouts, texts, and block summaries. `semantic.adapters.brd` maps physical ETCH layers, nets, padstack pad/barrel shapes, placed-pad bounding boxes, components / pins / footprints, padstack via templates, vias, track/shape segment chains, and keepout voids into `SemanticBoard`, supporting AuroraDB output for routing, copper polygons, eccentric slot vias, and `PolygonHole` geometry.
 
+BRD binary read notes are in [sources/brd/docs/BRD_BINARY_FORMAT.md](../sources/brd/docs/BRD_BINARY_FORMAT.md). That document only covers `.brd -> BRDLayout` parsing and debugging; it does not define an `AuroraDB -> BRD` writer.
+
 ## ALG Parsing Flow
 
 Cadence Allegro extracta ALG parsing uses a Rust + Python two-layer structure. ALG inputs are text records exported from `.brd` files by Cadence extracta, and the output is this project's own `ALGLayout` source JSON.
@@ -671,7 +677,7 @@ See [semantic/docs/architecture.md](../semantic/docs/architecture.md) for the de
 | AEDB | `sources/aedb/docs/aedb_schema.json` | `sources/aedb/docs/aedb_json_schema.md` | `sources/aedb/docs/CHANGELOG.md`, `sources/aedb/docs/SCHEMA_CHANGELOG.md` |
 | AuroraDB | `sources/auroradb/docs/auroradb_schema.json` | `sources/auroradb/docs/auroradb_json_schema.md` | `sources/auroradb/docs/CHANGELOG.md`, `sources/auroradb/docs/SCHEMA_CHANGELOG.md` |
 | ODB++ | `sources/odbpp/docs/odbpp_schema.json` | `sources/odbpp/docs/odbpp_json_schema.md` | `sources/odbpp/docs/CHANGELOG.md`, `sources/odbpp/docs/SCHEMA_CHANGELOG.md` |
-| BRD | Generated by `main.py schema --format brd` | No long-lived field guide yet | Project-level `docs/CHANGELOG.md` |
+| BRD | Generated by `main.py schema --format brd` | `sources/brd/docs/BRD_BINARY_FORMAT.md` | Project-level `docs/CHANGELOG.md` |
 | ALG | Generated by `main.py schema --format alg` | No long-lived field guide yet | Project-level `docs/CHANGELOG.md` |
 | Altium | Generated by `main.py schema --format altium` | No long-lived field guide yet | Project-level `docs/CHANGELOG.md` |
 | Semantic | `semantic/docs/semantic_schema.json` | `semantic/docs/semantic_json_schema.md` | `semantic/docs/CHANGELOG.md`, `semantic/docs/SCHEMA_CHANGELOG.md` |
