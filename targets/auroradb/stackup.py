@@ -47,9 +47,14 @@ def _export_layers(board: SemanticBoard) -> list[_ExportLayer]:
     materials_by_name = {
         material.name.casefold(): material for material in board.materials
     }
-    output_unit = _auroradb_output_unit(board.units)
+    output_unit = (
+        "mils"
+        if _is_aedb_def_binary_board(board)
+        else _auroradb_output_unit(board.units)
+    )
     seen_names: set[str] = set()
     export_layers: list[_ExportLayer] = []
+    dielectric_index = 0
 
     for index, layer in enumerate(_ordered_layers(board.layers)):
         kind = _stackup_kind(layer)
@@ -66,12 +71,23 @@ def _export_layers(board: SemanticBoard) -> list[_ExportLayer]:
         thickness = _length_to_unit(
             layer.thickness, source_unit=board.units, target_unit=output_unit
         )
+        if _is_aedb_def_binary_board(board) and _is_aedb_def_binary_surface_dielectric(
+            layer, kind, thickness
+        ):
+            continue
         if thickness is None or thickness <= 0:
             thickness = (
                 _mil_to_unit(DEFAULT_METAL_THICKNESS_MIL, output_unit)
                 if kind == "Metal"
                 else _mil_to_unit(DEFAULT_DIELECTRIC_THICKNESS_MIL, output_unit)
             )
+        if (
+            _is_aedb_def_binary_board(board)
+            and kind == "Dielectric"
+            and layer.name.upper().startswith("UNNAMED_")
+        ):
+            layer_name = f"D{dielectric_index}"
+            dielectric_index += 1
 
         export_layers.append(
             _ExportLayer(
@@ -85,6 +101,25 @@ def _export_layers(board: SemanticBoard) -> list[_ExportLayer]:
             )
         )
     return export_layers
+
+
+def _is_aedb_def_binary_board(board: SemanticBoard) -> bool:
+    metadata = getattr(board, "metadata", None)
+    return (
+        getattr(metadata, "source_format", None) == "aedb"
+        and (getattr(metadata, "source_step", None) or "").casefold() == "def-binary"
+    )
+
+
+def _is_aedb_def_binary_surface_dielectric(
+    layer: SemanticLayer, kind: str, thickness: float | None
+) -> bool:
+    if kind != "Dielectric":
+        return False
+    material = (layer.material or "").strip().casefold()
+    if material != "air":
+        return False
+    return thickness is None or abs(thickness) <= 1e-12
 
 
 def _with_generated_dielectrics(layers: list[_ExportLayer]) -> list[_ExportLayer]:

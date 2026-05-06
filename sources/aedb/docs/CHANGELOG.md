@@ -10,6 +10,67 @@
 
 在 `0.3.0` 之前，项目整体版本和 AEDB 解析器版本还没有拆分。下面较早的记录从项目级变更记录中迁移而来，因为它们主要描述 AEDB 解析行为、性能、结构或打包调整。
 
+## DEF binary 0.13.0
+
+- Rust AEDB `.def` parser crate 更新到 `0.13.0`，独立 `AEDBDefBinaryLayout` schema 更新到 `0.13.0`；默认 PyEDB AEDB parser 仍保持 `0.4.56`。
+- `domain.padstacks[]` 现在保留 text padstack `hle(shp=..., Szs(...), X/Y/R)` 钻孔字段；`domain.padstacks[].layer_pads[]` 现在同时保留 `ant(...)` 和 `thm(...)` 的 shape、尺寸、offset 与 rotation，用于无 ANF 转换恢复 barrel、antipad clearance 和 padstack shape。
+- 使用 `examples/edb_cases/DemoCase_LPDDR4.def` 验证：`C200-109T` 可由 `.def` text padstack 字段恢复为 AuroraDB `RectCutCorner 0 0 150 200 75 N Y Y Y Y` barrel；`VIA8D16` / `VIA10D18` / through-hole padstack 的 clearance holes 现在来自 `.def` padstack source 字段，而不依赖 ANF sidecar。
+
+## DEF binary 0.12.0
+
+- Rust AEDB `.def` parser crate 更新到 `0.12.0`，独立 `AEDBDefBinaryLayout` schema 更新到 `0.12.0`；默认 PyEDB AEDB parser 仍保持 `0.4.56`。
+- `SLayer(...)` text record 现在会跨行重组后再解析，stackup layer 可恢复厚度、材料和 fill material；`domain.materials[]` 现在读取 text material block 里的 `conductivity`、`permittivity` 和 `dielectric_loss_tangent`。
+- native polygon scanner 现在会识别 `Outline` 层的 board-outline polygon record，Demo case 可直接从 `.def` 恢复标准圆角外框。三套纯 `.def` 样本当前恢复 native polygon/void record：`DemoCase_LPDDR4=840`、`SW_ARM_1029=403`、`Zynq_Phoenix_Pro=744`。
+
+## DEF binary 0.11.0
+
+- Rust AEDB `.def` parser crate 更新到 `0.11.0`，独立 `AEDBDefBinaryLayout` schema 更新到 `0.11.0`；默认 PyEDB AEDB parser 仍保持 `0.4.56`。
+- `domain.binary_polygon_records[].net_index/net_name` 现在会从同一大二进制 primitive 流中的 path net context 恢复。`.def` path 记录按 layout net 单调分组，native polygon/void 记录插在对应 net group 内；parser 会把当前 path net owner 写入 polygon，并把 owner 传播给同 parent 的 void polygon。
+- 三套纯 `.def` 样本验证 native polygon owner：`DemoCase_LPDDR4` 的 `537` 条 polygon/void、`SW_ARM_1029` 的 `345` 条、`Zynq_Phoenix_Pro` 的 `384` 条均恢复到 net 0，分别为 `GND` / `GND_POWER` / `GND`。
+
+## DEF binary 0.10.0
+
+- Rust AEDB `.def` parser crate 更新到 `0.10.0`，独立 `AEDBDefBinaryLayout` schema 更新到 `0.10.0`；默认 PyEDB AEDB parser 仍保持 `0.4.56`。
+- 新增 `domain.padstack_instance_definitions[]`，从 text record 前的 7-byte object id 前缀和 `$begin ''` block 里的 `def` / `fl` / `tl` 字段恢复 `raw_definition_index -> padstack_id` 以及真实 top/bottom layer。无 ANF 时 component pad 不再只能靠 raw definition 数字或名称启发式。
+- 三套纯 `.def` 样本验证恢复 padstack-instance definition 映射：`DemoCase_LPDDR4=80`、`SW_ARM_1029=112`、`Zynq_Phoenix_Pro=52`。SW 样本中 `1906 -> PAD_SMD-0402`、`120 -> SMD_18` 等映射可直接驱动 AuroraDB `PadTemplate` 的真实 rectangle/circle/oval/square shape。
+
+## DEF binary 0.9.0
+
+- Rust AEDB `.def` parser crate 更新到 `0.9.0`，独立 `AEDBDefBinaryLayout` schema 更新到 `0.9.0`；默认 PyEDB AEDB parser 仍保持 `0.4.56`。
+- `binary_padstack_instance_records[]` 新增 `drill_diameter`，从 padstack instance tail 的 double 字段恢复 drill 直径。Demo `via_3781` 解为 `0.0002032 m`（8 mil），`via_4442` 解为 `0.000254 m`（10 mil）；component pin pad 的该字段保持为空。
+- `padstacks[].layer_pads[]` 现在保留 text padstack `pad(shp=..., Szs(...), X=..., Y=..., R=...)` 的尺寸和变换字段；无 ANF 转换会优先用这些源字段生成 circle/rectangle/obround pad shape，再退回名称启发式。
+- 在删除所有 ANF sidecar 后，三套同版本 `.def` 样本仍可通过 `convert --from aedb --aedb-backend def-binary --to auroradb` 端到端输出 AuroraDB，包含 `layout.db`、`parts.db`、`stackup.dat`、`stackup.json` 和 `layers/*.lyr`。native polygon/void 点列会写出为 layer `Polygon` / `PolygonHole` / `Holes`，board outline 回退为 native 大平面 bbox 加 20 mil clearance。
+
+## DEF binary 0.8.0
+
+- Rust AEDB `.def` parser crate 更新到 `0.8.0`，独立 `AEDBDefBinaryLayout` schema 更新到 `0.8.0`；默认 PyEDB AEDB parser 仍保持 `0.4.56`。
+- `AEDBDefBinaryDomain` 新增 `binary_polygon_records`，从原生 `.def` 二进制 polygon preamble 和 raw-point stream 恢复 geometry id、parent geometry id、outer/void 标志、layer id/name、点列和 arc-height marker。`net_index` / `net_name` 先保留为空，后续继续反解 owner 关系。
+- 三套同 AEDT/EDB 版本样本验证：`DemoCase_LPDDR4` 恢复 `537` 条 polygon record（outer `23`、void `514`），`SW_ARM_1029` 恢复 `345` 条（outer `128`、void `217`），`Zynq_Phoenix_Pro` 恢复 `384` 条（outer `50`、void `334`）。Zynq 样本覆盖奇数偏移记录和大于 `255` 的 parent polygon id 编码。
+
+## DEF binary 0.7.0
+
+- Rust AEDB `.def` parser crate 更新到 `0.7.0`，独立 `AEDBDefBinaryLayout` schema 更新到 `0.7.0`；默认 PyEDB AEDB parser 仍保持 `0.4.56`。
+- `AEDBDefBinaryDomain` 新增 `binary_padstack_instance_records`，从 component/pad 二进制记录恢复 EDB `PadstackInstance` 的全局偏移、geometry id、实例名、名称分类、net index/name、米单位坐标、弧度旋转、raw owner/definition 引用和二级 name/id。
+- Demo case 当前恢复 `2843` 条 padstack instance，按 geometry id 和坐标与 ANF `via(...)` 全量一致：`1714` 条 component pin pad、`1117` 条 `via_*`、`12` 条 unnamed/mechanical 记录；其中 `1726` 条包含二级 pin/name 字段。
+- 同版本新增样本 `SW_ARM_1029` 和 `Zynq_Phoenix_Pro` 验证通过：path 分别为 `2833` / `2208` 条，padstack instance 分别为 `3531` / `2709` 条，均按 ANF geometry id、layer/坐标、width/rotation 和 arc-height 全量匹配。`SW_ARM_1029` 暴露较大板面坐标，padstack 坐标 guard 改为与 path decoder 一致的 `±10000 mil` 范围。
+- `pyedb-core` API 源码确认这些记录对应 EDB `PadstackInstance` 语义：位置/旋转、top/bottom layer range、padstack definition、net、component 和 layout-pin 状态属于同一对象族；本次先落地已验证的 on-disk 字段，padstack definition 和 layer range owner 仍待继续反解。
+- Python 端新增 `AEDBDefBinaryLayout -> SemanticBoard` adapter，`convert --from aedb --aedb-backend def-binary --to auroradb` 不再停在 source JSON，可直接写出 AuroraDB `layout.db`、`parts.db`、`stackup.dat/json` 和 layer 文件。
+- 当 `.def` 同目录存在 ANF sidecar 时，adapter 会用 ANF `via(...)` 与 `Padstacks` 块补齐 raw padstack definition 的真实名称、层跨度和基础 circle/rectangle/obround/polygon pad shape，并用 `PolygonWithVoids` / `Graphics(... Polygon(...))` 补齐 polygon 与 hole 导出。纯 `.def` 二进制里已定位到 polygon 点列和 `f64::MAX` arc-height marker 结构，但 layer/net/void grouping 的 native 解码仍待完成。
+
+## DEF binary 0.6.0
+
+- Rust AEDB `.def` parser crate 更新到 `0.6.0`，独立 `AEDBDefBinaryLayout` schema 更新到 `0.6.0`；默认 PyEDB AEDB parser 仍保持 `0.4.56`。
+- `AEDBDefBinaryDomain` 新增 `layout_nets`，从 `.def` 大二进制 record 开头的 net table 恢复 net index/name；Demo case 当前恢复 `335` 个 layout net。
+- `binary_path_records` 新增 `net_index`、`net_name`、`layer_id` 和 `layer_name`。Demo case 的 1965 条 path 均可由二进制 preamble 自身解出 net/layer，并与 ANF `LayoutNet` / `Graphics('<layer>', Path(...))` 上下文一致。
+- via 研究更新：当前 tail-pattern 解析出的 1117 条记录按坐标匹配到 ANF 的真实通孔子集，主要为 TOP/BOTTOM `VIA8D16` / `VIA10D18` 类实例；ANF 中大量 TOP-TOP / BOTTOM-BOTTOM `via(...)` 更接近 component pad 或单层 padstack instance，位于另一类 component/pad 二进制记录中。
+
+## DEF binary 0.5.0
+
+- Rust AEDB `.def` parser crate 更新到 `0.5.0`，独立 `AEDBDefBinaryLayout` schema 更新到 `0.5.0`；默认 PyEDB AEDB parser 仍保持 `0.4.56`。
+- `AEDBDefBinaryDomain` 新增 `binary_path_records`，保存二进制 path record 的全局偏移、可解码几何 ID、宽度、点列、arc-height marker，以及 Line/Larc segment 计数。
+- 使用 `examples/edb_cases/DemoCase_LPDDR4.def` 对照 `examples/edb_cases/DemoCase_LPDDR4.anf` 验证：1965 条 `.def` binary path record 与 ANF `Graphics(... Path(...))` 记录按顺序、宽度和米单位坐标一致；`.def` 文件结构是 text DSL record 与 binary record 交错的 AEDB 存储流，不是 ANF 文本的直接二进制封装。
+- 已知限制：via 目前只覆盖可由 `via_<id>` 字符串尾部定位的 1117 条记录，尚未覆盖 Demo case 中 ANF 的全部 2843 条 via；polygon/void payload 和 path 的精确 net/layer owner 表仍未解码。
+
 ## 0.4.56
 
 - 移除 AEDB path / polygon source model 上面向 AuroraDB 的 Pydantic `PrivateAttr` 运行时 `NetGeom` 缓存，AEDB 解析层不再生成目标格式文本行。
@@ -615,6 +676,67 @@
 [中文](#zh) | [Back to top](#top)
 
 Before `0.3.0`, the project version and AEDB parser version were not split. The older entries below were moved from the project changelog because they describe AEDB parsing behavior, performance, structure, or packaging work.
+
+## DEF binary 0.13.0
+
+- The Rust AEDB `.def` parser crate is now `0.13.0`, and the separate `AEDBDefBinaryLayout` schema is now `0.13.0`; the default PyEDB AEDB parser remains `0.4.56`.
+- `domain.padstacks[]` now preserves text-padstack `hle(shp=..., Szs(...), X/Y/R)` drill fields. `domain.padstacks[].layer_pads[]` now also preserves `ant(...)` and `thm(...)` shape, size, offset, and rotation fields so no-ANF conversion can recover barrel, antipad clearance, and padstack shapes.
+- Verified with `examples/edb_cases/DemoCase_LPDDR4.def`: `C200-109T` is recovered from `.def` text padstack fields as the AuroraDB `RectCutCorner 0 0 150 200 75 N Y Y Y Y` barrel, and `VIA8D16` / `VIA10D18` / through-hole padstack clearance holes now come from `.def` padstack source fields instead of an ANF sidecar.
+
+## DEF binary 0.12.0
+
+- The Rust AEDB `.def` parser crate is now `0.12.0`, and the separate `AEDBDefBinaryLayout` schema is now `0.12.0`; the default PyEDB AEDB parser remains `0.4.56`.
+- `SLayer(...)` text records are now reassembled across lines before parsing, so stackup layers recover thickness, material, and fill material; `domain.materials[]` now reads `conductivity`, `permittivity`, and `dielectric_loss_tangent` from text material blocks.
+- The native polygon scanner now recognizes board-outline polygon records on the `Outline` layer, allowing the Demo case to recover the standard rounded outline directly from `.def`. The three no-ANF samples currently recover native polygon/void record counts of `DemoCase_LPDDR4=840`, `SW_ARM_1029=403`, and `Zynq_Phoenix_Pro=744`.
+
+## DEF binary 0.11.0
+
+- The Rust AEDB `.def` parser crate is now `0.11.0`, and the separate `AEDBDefBinaryLayout` schema is now `0.11.0`; the default PyEDB AEDB parser remains `0.4.56`.
+- `domain.binary_polygon_records[].net_index/net_name` is now recovered from the path net context in the same large binary primitive stream. `.def` path records are monotonic by layout net, and native polygon/void records are inserted inside the matching net group; the parser writes the current path net owner onto each polygon and propagates it to void polygons with the same parent.
+- The three pure `.def` samples validate native polygon ownership: `537` Demo polygons/voids, `345` SW polygons/voids, and `384` Zynq polygons/voids all recover to net 0, respectively `GND` / `GND_POWER` / `GND`.
+
+## DEF binary 0.10.0
+
+- The Rust AEDB `.def` parser crate is now `0.10.0`, and the separate `AEDBDefBinaryLayout` schema is now `0.10.0`; the default PyEDB AEDB parser remains `0.4.56`.
+- Added `domain.padstack_instance_definitions[]`, recovering the `raw_definition_index -> padstack_id` mapping and real top/bottom layers from the 7-byte object-id prefix before a text record plus the `def` / `fl` / `tl` fields inside the following `$begin ''` block. Without ANF, component pads no longer rely only on raw definition numbers or name heuristics.
+- Validation across the three pure `.def` samples recovers padstack-instance definition mappings: `DemoCase_LPDDR4=80`, `SW_ARM_1029=112`, and `Zynq_Phoenix_Pro=52`. In the SW sample, mappings such as `1906 -> PAD_SMD-0402` and `120 -> SMD_18` directly drive real AuroraDB `PadTemplate` rectangle/circle/oval/square shapes.
+
+## DEF binary 0.9.0
+
+- The Rust AEDB `.def` parser crate is now `0.9.0`, and the separate `AEDBDefBinaryLayout` schema is now `0.9.0`; the default PyEDB AEDB parser remains `0.4.56`.
+- `binary_padstack_instance_records[]` adds `drill_diameter`, recovering the drill diameter from a double field in the padstack-instance tail. Demo `via_3781` decodes to `0.0002032 m` (8 mil), and `via_4442` decodes to `0.000254 m` (10 mil); component pin pads keep this field empty.
+- `padstacks[].layer_pads[]` now preserves dimensions and transform fields from text padstack `pad(shp=..., Szs(...), X=..., Y=..., R=...)` records. No-ANF conversion prefers these source fields for circle/rectangle/obround pad shapes before falling back to name heuristics.
+- After removing all ANF sidecars, the three same-version `.def` samples still convert end to end with `convert --from aedb --aedb-backend def-binary --to auroradb`, producing `layout.db`, `parts.db`, `stackup.dat`, `stackup.json`, and `layers/*.lyr`. Native polygon/void point streams are emitted as layer `Polygon` / `PolygonHole` / `Holes`, and the board outline falls back to a native large-plane bbox expanded by 20 mil.
+
+## DEF binary 0.8.0
+
+- The Rust AEDB `.def` parser crate is now `0.8.0`, and the separate `AEDBDefBinaryLayout` schema is now `0.8.0`; the default PyEDB AEDB parser remains `0.4.56`.
+- Added `binary_polygon_records` to `AEDBDefBinaryDomain`, recovering geometry id, parent geometry id, outer/void flag, layer id/name, point lists, and arc-height markers from native `.def` binary polygon preambles and raw-point streams. `net_index` / `net_name` are reserved as empty fields while owner decoding continues.
+- Validation across three same-version AEDT/EDB samples: `DemoCase_LPDDR4` recovers `537` polygon records (outer `23`, void `514`), `SW_ARM_1029` recovers `345` records (outer `128`, void `217`), and `Zynq_Phoenix_Pro` recovers `384` records (outer `50`, void `334`). The Zynq sample covers odd-offset records and parent polygon ids greater than `255`.
+
+## DEF binary 0.7.0
+
+- The Rust AEDB `.def` parser crate is now `0.7.0`, and the separate `AEDBDefBinaryLayout` schema is now `0.7.0`; the default PyEDB AEDB parser remains `0.4.56`.
+- Added `binary_padstack_instance_records` to `AEDBDefBinaryDomain`, recovering EDB `PadstackInstance` offsets, geometry ids, instance names, name classes, net index/name, meter-unit coordinates, radian rotations, raw owner/definition references, and secondary name/id fields from component/pad binary records.
+- The Demo case now recovers all `2843` padstack instances by geometry id and coordinate against ANF `via(...)`: `1714` component pin pads, `1117` `via_*` records, and `12` unnamed/mechanical records; `1726` of them carry secondary pin/name fields.
+- Added same-version validation with `SW_ARM_1029` and `Zynq_Phoenix_Pro`: path counts are `2833` / `2208`, padstack instance counts are `3531` / `2709`, and all match ANF geometry ids, layers/coordinates, widths/rotations, and arc-height values. `SW_ARM_1029` exposed a larger board coordinate range, so the padstack coordinate guard now uses the same `±10000 mil` range as the path decoder.
+- The `pyedb-core` API source confirms these records align with EDB `PadstackInstance` semantics: position/rotation, top/bottom layer range, padstack definition, net, component, and layout-pin state are part of the same object family. This release emits the verified on-disk fields first; padstack definition and layer-range ownership remain under reverse engineering.
+- Added the Python `AEDBDefBinaryLayout -> SemanticBoard` adapter, so `convert --from aedb --aedb-backend def-binary --to auroradb` no longer stops at source JSON and can write AuroraDB `layout.db`, `parts.db`, `stackup.dat/json`, and layer files directly.
+- When a sibling ANF sidecar exists, the adapter enriches raw padstack definitions with real names, layer spans, and basic circle/rectangle/obround/polygon pad shapes from ANF `via(...)` and `Padstacks`, and emits polygons and holes from `PolygonWithVoids` / `Graphics(... Polygon(...))`. Native `.def` binary research has located polygon point lists and the `f64::MAX` arc-height marker structure, but layer/net/void grouping still needs native decoding.
+
+## DEF binary 0.6.0
+
+- The Rust AEDB `.def` parser crate is now `0.6.0`, and the separate `AEDBDefBinaryLayout` schema is now `0.6.0`; the default PyEDB AEDB parser remains `0.4.56`.
+- Added `layout_nets` to `AEDBDefBinaryDomain`, recovering net index/name pairs from the net table at the start of the large `.def` binary record; the Demo case currently recovers `335` layout nets.
+- Added `net_index`, `net_name`, `layer_id`, and `layer_name` to `binary_path_records`. All 1965 Demo case paths can now decode net/layer ownership from the binary preamble itself, matching the ANF `LayoutNet` / `Graphics('<layer>', Path(...))` context.
+- Via research update: the 1117 records found by the tail-pattern decoder match real ANF through-via subsets by coordinate, mainly TOP/BOTTOM `VIA8D16` / `VIA10D18` instances; many ANF TOP-TOP / BOTTOM-BOTTOM `via(...)` entries are closer to component pads or single-layer padstack instances stored in another component/pad binary record form.
+
+## DEF binary 0.5.0
+
+- The Rust AEDB `.def` parser crate is now `0.5.0`, and the separate `AEDBDefBinaryLayout` schema is now `0.5.0`; the default PyEDB AEDB parser remains `0.4.56`.
+- Added `binary_path_records` to `AEDBDefBinaryDomain`, carrying decoded binary path record offsets, geometry ids where available, widths, point lists, arc-height markers, and Line/Larc segment counts.
+- Verified `examples/edb_cases/DemoCase_LPDDR4.def` against `examples/edb_cases/DemoCase_LPDDR4.anf`: all 1965 `.def` binary path records match ANF `Graphics(... Path(...))` records by order, width, and meter-unit coordinates; the `.def` file is an AEDB storage stream interleaving text DSL records and binary records, not a direct binary packing of the ANF text.
+- Known limits: via decoding currently covers only the 1117 records locatable from `via_<id>` string tails, not all 2843 ANF vias in the Demo case; polygon/void payloads and exact path net/layer owner tables remain undecoded.
 
 ## 0.4.56
 

@@ -127,8 +127,8 @@ flowchart LR
 - `sources/aedb/extractors/layout.py` 负责组织各领域 extractor 并构建 payload。
 - `sources/aedb/models.py` 是 AEDB JSON 结构的权威定义。
 - `AEDBLayout.model_json_schema()` 生成机器可读 schema。
-- `crates/aedb_parser/` 目前提供 `parse`、`roundtrip` 和 `compare-auroradb` CLI：`parse` 输出 `.def` record / DSL / domain 摘要，包含 binary via-tail 坐标计数和 raw-point path Line/Larc segment 统计；`roundtrip` 从解析后的 record stream 写回 `.def`；`compare-auroradb` 将 `.def` domain 抽取结果与标准 AuroraDB 目录做名称和计数对照。
-- Python CLI 通过显式 `--aedb-backend def-binary` 接入该 Rust parser；默认 `--aedb-backend pyedb` 行为不变，`def-binary` 当前只支持 `inspect source` 和 `dump source-json`。
+- `crates/aedb_parser/` 目前提供 `parse`、`roundtrip` 和 `compare-auroradb` CLI：`parse` 输出 `.def` record / DSL / domain 摘要，包含 binary padstack instance、drill diameter、raw-point path、native polygon/void 和 Line/Larc segment 统计；`roundtrip` 从解析后的 record stream 写回 `.def`；`compare-auroradb` 将 `.def` domain 抽取结果与标准 AuroraDB 目录做名称和计数对照。
+- Python CLI 通过显式 `--aedb-backend def-binary` 接入该 Rust parser；默认 `--aedb-backend pyedb` 行为不变，`def-binary` 支持 `inspect source`、`dump source-json`，以及 `convert --from aedb --aedb-backend def-binary --to auroradb` 的端到端输出。
 - `convert --from aedb --to auroradb` 在未请求 `--source-output` / `--semantic-output` 时会自动使用 `auroradb-minimal` 解析 profile，只保存 AuroraDB 导出必需字段和运行时私有几何缓存，减少 path / polygon 解析时间。
 - 显式导出 AEDB JSON 或 Semantic JSON 时始终使用完整 `full` profile；也可以用 `--aedb-parse-profile full` 强制关闭自动最小化解析。
 
@@ -326,6 +326,8 @@ JSON payload 中统一输出：
 | Project | `1.0.44` |
 | AEDB parser | `0.4.56` |
 | AEDB JSON schema | `0.5.0` |
+| AEDB DEF binary parser | `0.13.0` |
+| AEDB DEF binary JSON schema | `0.13.0` |
 | AuroraDB parser | `0.2.14` |
 | AuroraDB JSON schema | `0.2.0` |
 | ODB++ parser | `0.6.3` |
@@ -336,7 +338,7 @@ JSON payload 中统一输出：
 | ALG JSON schema | `0.2.0` |
 | Altium parser | `0.1.2` |
 | Altium JSON schema | `0.1.0` |
-| Semantic parser | `0.7.18` |
+| Semantic parser | `0.7.26` |
 | Semantic JSON schema | `0.7.2` |
 
 ## 开发和构建
@@ -522,8 +524,8 @@ Key points:
 - `sources/aedb/extractors/layout.py` coordinates domain extractors and builds the payload.
 - `sources/aedb/models.py` is the authoritative definition of the AEDB JSON structure.
 - `AEDBLayout.model_json_schema()` generates the machine-readable schema.
-- `crates/aedb_parser/` currently exposes `parse`, `roundtrip`, and `compare-auroradb` CLI commands: `parse` writes `.def` record / DSL / domain summaries, including binary via-tail coordinate counts and raw-point path Line/Larc segment statistics; `roundtrip` writes `.def` from the parsed record stream; and `compare-auroradb` compares `.def` domain extraction against a standard AuroraDB directory.
-- The Python CLI integrates this Rust parser only through explicit `--aedb-backend def-binary`; the default `--aedb-backend pyedb` behavior is unchanged, and `def-binary` currently supports only `inspect source` and `dump source-json`.
+- `crates/aedb_parser/` currently exposes `parse`, `roundtrip`, and `compare-auroradb` CLI commands: `parse` writes `.def` record / DSL / domain summaries, including binary padstack instances, drill diameters, raw-point paths, native polygon/void records, and Line/Larc segment statistics; `roundtrip` writes `.def` from the parsed record stream; and `compare-auroradb` compares `.def` domain extraction against a standard AuroraDB directory.
+- The Python CLI integrates this Rust parser only through explicit `--aedb-backend def-binary`; the default `--aedb-backend pyedb` behavior is unchanged, and `def-binary` supports `inspect source`, `dump source-json`, and end-to-end `convert --from aedb --aedb-backend def-binary --to auroradb`.
 - `convert --from aedb --to auroradb` automatically uses the `auroradb-minimal` parse profile when neither `--source-output` nor `--semantic-output` is requested; it keeps only fields and runtime-private geometry caches required by AuroraDB export to reduce path / polygon parse time.
 - Explicit AEDB JSON or Semantic JSON export always uses the complete `full` profile. Pass `--aedb-parse-profile full` to force full parsing on direct AuroraDB conversion.
 
@@ -721,6 +723,8 @@ Current versions:
 | Project | `1.0.44` |
 | AEDB parser | `0.4.56` |
 | AEDB JSON schema | `0.5.0` |
+| AEDB DEF binary parser | `0.13.0` |
+| AEDB DEF binary JSON schema | `0.13.0` |
 | AuroraDB parser | `0.2.14` |
 | AuroraDB JSON schema | `0.2.0` |
 | ODB++ parser | `0.6.3` |
@@ -731,7 +735,7 @@ Current versions:
 | ALG JSON schema | `0.2.0` |
 | Altium parser | `0.1.2` |
 | Altium JSON schema | `0.1.0` |
-| Semantic parser | `0.7.18` |
+| Semantic parser | `0.7.26` |
 | Semantic JSON schema | `0.7.2` |
 
 ## Development And Build

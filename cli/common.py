@@ -63,7 +63,7 @@ def add_source_arguments(parser: argparse.ArgumentParser) -> None:
         default="pyedb",
         help=(
             "AEDB parser backend. Default: pyedb. "
-            "def-binary calls the Rust .def parser for inspect/source-json only."
+            "def-binary calls the Rust .def parser and supports inspect/source-json plus experimental conversion."
         ),
     )
     parser.add_argument("--step", help="ODB++ step to use for detailed extraction.")

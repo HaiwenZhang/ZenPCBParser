@@ -74,11 +74,23 @@ logger = logging.getLogger("aurora_translator.targets.auroradb")
 
 
 def _library_unit(board: SemanticBoard) -> str:
+    if _is_aedb_def_binary_board(board):
+        return "mils"
     return _auroradb_output_unit(board.units)
 
 
 def _part_geometry_source_unit(board: SemanticBoard) -> str | None:
+    if _is_aedb_def_binary_board(board):
+        return board.units
     return _source_unit_for_auroradb_output(board.units)
+
+
+def _is_aedb_def_binary_board(board: SemanticBoard) -> bool:
+    metadata = getattr(board, "metadata", None)
+    return (
+        getattr(metadata, "source_format", None) == "aedb"
+        and (getattr(metadata, "source_step", None) or "").casefold() == "def-binary"
+    )
 
 
 def _aaf_text(lines: list[str]) -> str:
@@ -1866,6 +1878,8 @@ def _format_footprint_pad_rotation(
 
 def _aedb_export_plan(board: SemanticBoard) -> _AedbExportPlan | None:
     if board.metadata.source_format != "aedb":
+        return None
+    if _is_aedb_def_binary_board(board):
         return None
 
     components_by_part: dict[str, list[SemanticComponent]] = {}

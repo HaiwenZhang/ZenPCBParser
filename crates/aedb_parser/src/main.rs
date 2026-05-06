@@ -135,7 +135,7 @@ fn parse_args(args: Vec<String>) -> Result<CliOptions, String> {
     let mut indent = Some(2);
     let mut project_version = "unknown".to_string();
     let mut parser_version = RUST_PARSER_VERSION.to_string();
-    let mut schema_version = "0.4.0".to_string();
+    let mut schema_version = RUST_PARSER_VERSION.to_string();
 
     let mut index = start_index;
     while index < args.len() {

@@ -8,6 +8,46 @@
 
 [English](#en) | [返回顶部](#top)
 
+## 0.7.26
+
+- AEDB DEF binary -> SemanticBoard 现在从 component pin padstack instance 的 source rotation 恢复 component placement rotation；AuroraDB target 对 AEDB bottom component 使用 bottom-side `flipY` 约定，修正 `DemoCase_LPDDR4.def` 中 Bottom `C131/C136/C137/C130/C363` 和 Top `R111/C11/R57` 的旋转。Semantic JSON schema 保持 `0.7.2`。
+- AuroraDB target 现在会按 `CCW Y` 输出规范归一 native polygon / void 的点序和圆弧方向，避免 Bottom/GND 右上大圆形 void 被渲染器按错误方向布尔处理；AEDB DEF binary adapter 也补齐 Bottom/GND 上层区域的 `VIA8D16` margin-only clearance void，并把 trailing closing arc 纳入 native void coverage，避免同一 native hole 再生成多余圆孔。DemoCase 该大 void 的直接子 hole 数与 Standard 对齐为 `15/15`。
+
+## 0.7.25
+
+- AEDB DEF binary -> SemanticBoard 现在使用 `.def` text padstack 的 `hle(...)`、`ant(...)` 和 `thm(...)` source 字段恢复 barrel、antipad clearance 和 padstack layer shape；`C200-109T` 在 AuroraDB 中恢复为 Standard 使用的 `RectCutCorner 0 0 150 200 75 N Y Y Y Y` barrel。
+- DEF binary direct AuroraDB 的 `ViaList` 现在按 AEDT Standard 导出顺序编号：routing via 先输出，并为被折叠的 mask padstack 预留隐藏 ID，DemoCase 输出为 `1 VIA8D16`、`2 VIA10D18`、`6 C060-040T`、`7 S060-040T`、`8 C200-109T`、`9 HOLE64N`、`10 HOLE35N`。
+- `examples/edb_cases/DemoCase_LPDDR4.def` 重新验证：输出 `shapes=61`、`vias=7`、`net_geometries=9785`，layer 顶层几何类型保持 `Line=7998`、`Polygon=33`、`PolygonHole=39`；nested clearance holes 为 `1733` 个，Standard 为 `1742` 个，剩余差异主要是 routing via 的 `24.04mil` / `26.04mil` clearance 细分和 1 个 native complex hole。Semantic JSON schema 保持 `0.7.2`。
+
+## 0.7.24
+
+- AEDB DEF binary -> SemanticBoard 的纯 `.def` AuroraDB 输出现在对 `DemoCase_LPDDR4.def` 的 Standard 参考达到 `units=mils`、`components=293`、`parts=58`、`nets=335`、`via_templates=7`、`net_geometries=9785`，并对齐 layer geometry 类型分布 `Line=7998`、`Polygon=33`、`PolygonHole=39`。
+- AuroraDB target 对显式整圆 void raw geometry 直接输出 `Pnt` + `Parc` 圆弧 hole，避免因少于 3 个点退回 bbox 矩形。Semantic JSON schema 保持 `0.7.2`。
+
+## 0.7.23
+
+- AEDB DEF binary -> SemanticBoard 现在为纯 `.def` 转换写入 `metadata.source_step=def-binary`，便于下游区分 PyEDB AEDB 和 Rust DEF binary source payload。
+- AEDB DEF binary adapter 现在使用 source material conductivity / permittivity / loss tangent 构建 `SemanticMaterial`，并从 native `Outline` polygon record 恢复 board outline；AuroraDB target 对 `source_step=def-binary` 的 layout、parts 和 stackup 统一输出 `mils`，同时从 semantic 米单位坐标换算。Semantic JSON schema 保持 `0.7.2`。
+
+## 0.7.22
+
+- AEDB DEF binary -> SemanticBoard 现在使用 source `binary_polygon_records[].net_name` 作为 native polygon owner，不再对无 ANF polygon 主要依赖层名/GND/`NoNet` 启发式。
+- AEDB DEF binary via/template geometry 现在记录由 padstack-instance definition layer range 推导出的 `via_type`、首末层、层序号、跨层数和 `spans_full_stack`；via instance 还记录 `via_usage`，用于区分 `routing_via`、`component_pin`、命名/未命名 padstack instance。`via_type` 覆盖 `through`、`blind`、`buried`、`single_layer` 和 `unknown`。Semantic JSON schema 保持 `0.7.2`。
+
+## 0.7.21
+
+- AEDB DEF binary -> SemanticBoard 现在使用 `domain.padstack_instance_definitions[]` 将 `binary_padstack_instance_records[].raw_definition_index` 映射回真实 `padstacks[].id` 和实际 top/bottom layer；无 ANF 时 component pad template 可以恢复 source text padstack 的 circle/rectangle/square/oval shape，而不再主要依赖 placeholder 或名称启发式。
+- `.def` text padstack 的 `shp='Ov'` / `shp='Sq'` 现在分别映射为 AuroraDB `RoundedRectangle` / square `Rectangle`。三套无 ANF 样本的 Semantic shape 数提升为 `37 / 73 / 22`，AuroraDB 输出继续包含 `layout.db`、`parts.db`、`stackup.dat/json` 和 `PolygonHole`/`Holes` layer geometry。Semantic JSON schema 保持 `0.7.2`。
+
+## 0.7.20
+
+- AEDB DEF binary -> SemanticBoard 在没有同目录 ANF sidecar 时，会从 `domain.binary_polygon_records` 直接生成 polygon primitive，并按 `parent_geometry_id` 把 void 挂回 outer polygon，使 AuroraDB `layers/*.lyr` 能输出 `PolygonHole` / `Holes`。native polygon net owner 仍未完全反解，缺失 owner 的 polygon 会保守归入 `NoNet` 或与层名精确匹配的 net。
+- AEDB DEF binary padstack template 现在使用 `drill_diameter` 和 padstack 名称尺寸提示恢复 drill circle、保守 pad shape 与 board outline fallback；无 ANF 的三套样本可输出 `layout.db`、`parts.db`、`stackup.dat/json` 和 layer polygon geometry。Semantic JSON schema 保持 `0.7.2`。
+
+## 0.7.19
+
+- AEDB DEF binary -> SemanticBoard 在同目录 ANF sidecar 存在时会优先从 ANF `Graphics('Outline', Polygon(...))` 恢复真实 board outline，避免回退到二进制 path bbox 生成错误外框；ANF `Padstacks` 中的 polygon pad shape 也会映射为 Semantic polygon shape。Semantic JSON schema 保持 `0.7.2`。
+
 ## 0.7.18
 
 - Altium -> SemanticBoard 现在按 KiCad C++ importer 的分工同时解析 `ShapeBasedRegions6` 和 legacy `Regions6`：独立 shape-based copper region 会导出为铜皮，带 polygon id 的 filled region 由 `Regions6` 导出并从引用的 polygon pour 继承真实 net，避免内层 polygon-with-holes 被归到 `NoNet` 或重复导出。shape-based region holes 按 Altium double 坐标读取，Top / Bottom Solder pad 会映射到对应 top / bottom 金属层，避免 metal-only AuroraDB 输出引用非金属 pad layer。Semantic JSON schema 保持 `0.7.2`。
@@ -452,6 +492,46 @@
 ## English
 
 [中文](#zh) | [Back to top](#top)
+
+## 0.7.26
+
+- AEDB DEF binary -> SemanticBoard now recovers component placement rotation from component-pin padstack-instance source rotation; the AuroraDB target uses the bottom-side `flipY` convention for AEDB bottom components, fixing the rotations of DemoCase Bottom `C131/C136/C137/C130/C363` and Top `R111/C11/R57`. Semantic JSON schema remains `0.7.2`.
+- The AuroraDB target now normalizes native polygon / void point order and arc direction to the emitted `CCW Y` convention, avoiding incorrect renderer boolean handling for the large upper-right Bottom/GND circular void. The AEDB DEF binary adapter also emits the missing upper-region Bottom/GND `VIA8D16` margin-only clearance voids and includes trailing closing arcs in native-void coverage so the same native hole does not produce a redundant circular void. DemoCase direct child holes for that large void align with Standard at `15/15`.
+
+## 0.7.25
+
+- AEDB DEF binary -> SemanticBoard now uses `.def` text-padstack `hle(...)`, `ant(...)`, and `thm(...)` source fields to recover barrel, antipad-clearance, and padstack-layer shapes. `C200-109T` now recovers to the Standard AuroraDB `RectCutCorner 0 0 150 200 75 N Y Y Y Y` barrel.
+- DEF-binary direct AuroraDB `ViaList` IDs now follow AEDT Standard export order: routing vias are emitted first, with hidden IDs reserved for collapsed mask padstacks. DemoCase now emits `1 VIA8D16`, `2 VIA10D18`, `6 C060-040T`, `7 S060-040T`, `8 C200-109T`, `9 HOLE64N`, and `10 HOLE35N`.
+- Revalidated `examples/edb_cases/DemoCase_LPDDR4.def`: output has `shapes=61`, `vias=7`, and `net_geometries=9785`, while top-level layer geometry remains `Line=7998`, `Polygon=33`, and `PolygonHole=39`. Nested clearance holes are `1733` versus Standard `1742`; the remaining gap is mainly routing-via `24.04mil` / `26.04mil` clearance subdivision plus one native complex hole. Semantic JSON schema remains `0.7.2`.
+
+## 0.7.24
+
+- AEDB DEF binary -> SemanticBoard pure `.def` AuroraDB output now reaches `units=mils`, `components=293`, `parts=58`, `nets=335`, `via_templates=7`, and `net_geometries=9785` against the Standard reference for `DemoCase_LPDDR4.def`, with layer geometry types aligned at `Line=7998`, `Polygon=33`, and `PolygonHole=39`.
+- The AuroraDB target now writes explicit full-circle void raw geometry directly as `Pnt` + `Parc` arc holes instead of falling back to bbox rectangles when fewer than three point vertices are present. Semantic JSON schema remains `0.7.2`.
+
+## 0.7.23
+
+- AEDB DEF binary -> SemanticBoard now writes `metadata.source_step=def-binary` for pure `.def` conversion, letting downstream targets distinguish PyEDB AEDB payloads from Rust DEF-binary source payloads.
+- The AEDB DEF binary adapter now builds `SemanticMaterial` from source material conductivity / permittivity / loss tangent and recovers the board outline from native `Outline` polygon records; the AuroraDB target exports layout, parts, and stackup for `source_step=def-binary` in `mils` while converting meter-based semantic coordinates. Semantic JSON schema remains `0.7.2`.
+
+## 0.7.22
+
+- AEDB DEF binary -> SemanticBoard now uses source `binary_polygon_records[].net_name` as the native polygon owner, so no-ANF polygons no longer mainly rely on layer-name/GND/`NoNet` heuristics.
+- AEDB DEF binary via/template geometry now records `via_type`, start/stop layers, layer indices, span count, and `spans_full_stack` derived from padstack-instance definition layer ranges; via instances also record `via_usage` to distinguish `routing_via`, `component_pin`, and named/unnamed padstack instances. `via_type` covers `through`, `blind`, `buried`, `single_layer`, and `unknown`. Semantic JSON schema remains `0.7.2`.
+
+## 0.7.21
+
+- AEDB DEF binary -> SemanticBoard now uses `domain.padstack_instance_definitions[]` to map `binary_padstack_instance_records[].raw_definition_index` back to real `padstacks[].id` values and actual top/bottom layers. Without ANF, component pad templates can recover source text padstack circle/rectangle/square/oval shapes instead of relying mainly on placeholders or name heuristics.
+- `.def` text padstack `shp='Ov'` / `shp='Sq'` now map to AuroraDB `RoundedRectangle` / square `Rectangle`. Semantic shape counts for the three no-ANF samples rise to `37 / 73 / 22`, while AuroraDB output still contains `layout.db`, `parts.db`, `stackup.dat/json`, and `PolygonHole`/`Holes` layer geometry. Semantic JSON schema remains `0.7.2`.
+
+## 0.7.20
+
+- AEDB DEF binary -> SemanticBoard now emits polygon primitives directly from `domain.binary_polygon_records` when no sibling ANF sidecar exists, attaching void records back to outer polygons through `parent_geometry_id` so AuroraDB `layers/*.lyr` can write `PolygonHole` / `Holes`. Native polygon net ownership is still not fully decoded; polygons without an owner fall back conservatively to `NoNet` or an exact layer-name net match.
+- AEDB DEF binary padstack templates now use `drill_diameter` plus dimension hints in padstack names to recover drill circles, conservative pad shapes, and a board-outline fallback. The three no-ANF samples produce `layout.db`, `parts.db`, `stackup.dat/json`, and layer polygon geometry. Semantic JSON schema remains `0.7.2`.
+
+## 0.7.19
+
+- AEDB DEF binary -> SemanticBoard now prefers the sibling ANF sidecar `Graphics('Outline', Polygon(...))` board outline when available, avoiding the incorrect binary-path bbox fallback; polygon pad shapes from ANF `Padstacks` are also mapped as Semantic polygon shapes. Semantic JSON schema remains `0.7.2`.
 
 ## 0.7.18
 

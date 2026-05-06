@@ -35,6 +35,7 @@ from aurora_translator.semantic.models import (
     SemanticPoint,
     SemanticPrimitive,
     SemanticShape,
+    SemanticVia,
     SemanticViaTemplate,
 )
 
@@ -137,7 +138,7 @@ def _shape_command(
     payload = _shape_geometry_payload(shape, shape_id, source_unit=source_unit)
     if payload is None:
         return None
-    shape_code = _shape_code(_shape_auroradb_type(shape))
+    shape_code = _shape_code_for_shape(shape)
     return f"layout add -g <{payload}> -id <{shape_id}> -shape <{shape_code}>"
 
 
@@ -297,6 +298,8 @@ def _pad_shape_command(
     source_unit: str | None,
     source_format: str | None = None,
 ) -> str | None:
+    if pad.geometry.get("suppress_shape_export"):
+        return None
     if not pad.net_id or pad.position is None:
         return None
     component = components_by_id.get(pad.component_id or "")
@@ -528,7 +531,7 @@ def _void_geometry_values(
     voids: list[list[str]] = []
     for raw_void in raw_voids:
         point_parts = _polygon_vertex_parts(raw_void, source_unit=source_unit)
-        if len(point_parts) >= 3:
+        if _polygon_parts_have_min_points(point_parts, 3):
             voids.append(_polygon_parts_values(point_parts))
     return voids
 
@@ -550,7 +553,7 @@ def _void_geometry_parts(
         point_parts = _polygon_vertex_parts(
             raw_void, source_unit=source_unit, min_points=min_points
         )
-        if len(point_parts) >= min_points:
+        if _polygon_parts_have_min_points(point_parts, min_points):
             voids.append(point_parts)
     return voids
 
@@ -561,17 +564,109 @@ def _polygon_vertex_parts(
     parts = _polygon_vertex_parts_from_arcs(
         _geometry_field(geometry, "arcs"), source_unit=source_unit
     )
-    if len(parts) >= min_points:
-        return parts
+    if _polygon_parts_have_min_points(parts, min_points):
+        return _auroradb_ccw_polygon_parts(parts)
 
     parts = _polygon_vertex_parts_from_raw_points(
         _geometry_field(geometry, "raw_points"), source_unit=source_unit
     )
-    if len(parts) >= min_points:
-        return parts
+    if _polygon_parts_have_min_points(parts, min_points):
+        return _auroradb_ccw_polygon_parts(parts)
 
     points = _polygon_points(geometry, source_unit=source_unit)
-    return [_polygon_point_parts(point) for point in points]
+    return _auroradb_ccw_polygon_parts([_polygon_point_parts(point) for point in points])
+
+
+def _polygon_parts_have_min_points(parts: list[list[str]], min_points: int) -> bool:
+    if len(parts) >= min_points:
+        return True
+    return _polygon_parts_are_full_circle(parts)
+
+
+def _polygon_parts_are_full_circle(parts: list[list[str]]) -> bool:
+    if len(parts) != 2 or len(parts[0]) != 2 or len(parts[1]) != 5:
+        return False
+    start_x = _number(parts[0][0])
+    start_y = _number(parts[0][1])
+    end_x = _number(parts[1][0])
+    end_y = _number(parts[1][1])
+    center_x = _number(parts[1][2])
+    center_y = _number(parts[1][3])
+    if None in {start_x, start_y, end_x, end_y, center_x, center_y}:
+        return False
+    start = (float(start_x), float(start_y))
+    end = (float(end_x), float(end_y))
+    center = (float(center_x), float(center_y))
+    return _is_full_circle_arc(start, end, center)
+
+
+def _auroradb_ccw_polygon_parts(parts: list[list[str]]) -> list[list[str]]:
+    area = _polygon_parts_signed_area(parts)
+    if area is None or area <= 0:
+        return parts
+    return _reverse_polygon_parts(parts)
+
+
+def _polygon_parts_signed_area(parts: list[list[str]]) -> float | None:
+    points: list[tuple[float, float]] = []
+    for part in parts:
+        if len(part) < 2:
+            continue
+        x = _number(part[0])
+        y = _number(part[1])
+        if x is None or y is None or not _is_finite(x) or not _is_finite(y):
+            return None
+        points.append((float(x), float(y)))
+    if len(points) < 3:
+        return None
+    if _same_xy(points[0], points[-1]):
+        points = points[:-1]
+    if len(points) < 3:
+        return None
+    area = 0.0
+    previous = points[-1]
+    for current in points:
+        area += previous[0] * current[1] - current[0] * previous[1]
+        previous = current
+    return area * 0.5
+
+
+def _reverse_polygon_parts(parts: list[list[str]]) -> list[list[str]]:
+    if len(parts) < 2:
+        return parts
+    closed = _same_part_point(parts[0], parts[-1])
+    edges = [(parts[index - 1], parts[index]) for index in range(1, len(parts))]
+    reversed_parts = [list(parts[0])]
+    if not closed:
+        reversed_parts.append([parts[-1][0], parts[-1][1]])
+    for old_start, old_end in reversed(edges):
+        if not closed and _same_part_point(old_start, parts[0]):
+            continue
+        new_part = [old_start[0], old_start[1]]
+        if len(old_end) == 5:
+            new_part.extend([old_end[2], old_end[3], _opposite_ccw_flag(old_end[4])])
+        reversed_parts.append(new_part)
+    return reversed_parts
+
+
+def _same_part_point(left: list[str], right: list[str]) -> bool:
+    if len(left) < 2 or len(right) < 2:
+        return False
+    left_x = _number(left[0])
+    left_y = _number(left[1])
+    right_x = _number(right[0])
+    right_y = _number(right[1])
+    if None in {left_x, left_y, right_x, right_y}:
+        return False
+    return _same_xy((float(left_x), float(left_y)), (float(right_x), float(right_y)))
+
+
+def _same_xy(left: tuple[float, float], right: tuple[float, float]) -> bool:
+    return abs(left[0] - right[0]) <= 1e-9 and abs(left[1] - right[1]) <= 1e-9
+
+
+def _opposite_ccw_flag(value: str) -> str:
+    return "N" if str(value).strip().upper() == "Y" else "Y"
 
 
 def _polygon_vertex_values_from_arcs(
@@ -1010,17 +1105,73 @@ def _aaf_trace_shape_ids(
 
 
 def _aaf_via_template_ids(via_templates: list[SemanticViaTemplate]) -> dict[str, str]:
-    return {
-        via_template.id: str(index + 1)
-        for index, via_template in enumerate(via_templates)
-    }
+    if any("auroradb_sort_group" in via_template.geometry for via_template in via_templates):
+        return _aaf_sorted_via_template_ids(via_templates)
+
+    result: dict[str, str] = {}
+    used_ids: set[str] = set()
+    next_id = 1
+    for via_template in via_templates:
+        preferred = via_template.geometry.get("auroradb_via_id")
+        preferred_id = _positive_integer_text(preferred)
+        if preferred_id is not None and preferred_id not in used_ids:
+            result[via_template.id] = preferred_id
+            used_ids.add(preferred_id)
+            continue
+        while str(next_id) in used_ids:
+            next_id += 1
+        result[via_template.id] = str(next_id)
+        used_ids.add(str(next_id))
+        next_id += 1
+    return result
+
+
+def _aaf_sorted_via_template_ids(
+    via_templates: list[SemanticViaTemplate],
+) -> dict[str, str]:
+    result: dict[str, str] = {}
+    next_id = 1
+    previous_group: int | None = None
+    reserve_after_group_0 = max(
+        (
+            _integer_value(
+                via_template.geometry.get("auroradb_hidden_id_reserve_after_group_0")
+            )
+            or 0
+            for via_template in via_templates
+        ),
+        default=0,
+    )
+    for via_template in via_templates:
+        group = _integer_value(via_template.geometry.get("auroradb_sort_group"))
+        if previous_group == 0 and group != 0:
+            next_id += reserve_after_group_0
+        result[via_template.id] = str(next_id)
+        next_id += 1
+        previous_group = group
+    return result
+
+
+def _positive_integer_text(value: Any) -> str | None:
+    if value in {None, ""}:
+        return None
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return None
+    if number <= 0:
+        return None
+    return str(number)
 
 
 def _via_templates_for_export(board: SemanticBoard) -> list[SemanticViaTemplate]:
     used_template_ids = {
         via.template_id
         for via in board.vias
-        if via.template_id and via.net_id and via.position is not None
+        if _semantic_via_can_emit_as_net_via(via)
+        and via.template_id
+        and via.net_id
+        and via.position is not None
     }
     multi_layer_template_ids_by_name = _multi_layer_via_template_ids_by_name(
         board.via_templates
@@ -1033,11 +1184,40 @@ def _via_templates_for_export(board: SemanticBoard) -> list[SemanticViaTemplate]
         )
         if template_id:
             used_template_ids.add(template_id)
-    return [
+    templates = [
         via_template
         for via_template in board.via_templates
         if via_template.id in used_template_ids
     ]
+    return sorted(templates, key=_via_template_export_sort_key)
+
+
+def _via_template_export_sort_key(
+    via_template: SemanticViaTemplate,
+) -> tuple[int, int, str]:
+    group = _integer_value(via_template.geometry.get("auroradb_sort_group"))
+    order = _integer_value(via_template.geometry.get("auroradb_sort_order"))
+    return (
+        group if group is not None else 2,
+        order if order is not None else 0,
+        via_template.name.casefold(),
+    )
+
+
+def _integer_value(value: Any) -> int | None:
+    if value in {None, ""}:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _semantic_via_can_emit_as_net_via(via: SemanticVia) -> bool:
+    via_usage = via.geometry.get("via_usage")
+    if via_usage in {None, "routing_via"}:
+        return True
+    return via.geometry.get("via_type") == "through"
 
 
 def _multi_layer_via_template_ids_by_name(
@@ -1058,6 +1238,8 @@ def _via_template_spans_multiple_layers(via_template: SemanticViaTemplate) -> bo
 
 
 def _component_pad_can_emit_as_via(pad: SemanticPad) -> bool:
+    if pad.geometry.get("suppress_via_export"):
+        return False
     return bool(
         pad.component_id
         and pad.pin_id
@@ -1143,9 +1325,18 @@ def _shape_code(geometry_type: str) -> str:
         return "1"
     if text in {"roundedrectangle", "rectcutcorner", "oval"}:
         return "2"
+    if text in {"roundedrectangle_y", "rectcutcorner_y", "oval_y"}:
+        return "3"
     if text == "polygon":
         return "3"
     return "0"
+
+
+def _shape_code_for_shape(shape: SemanticShape) -> str:
+    kind = (shape.kind or "").casefold()
+    if kind in {"rounded_rectangle_y", "rectcutcorner_y", "oval_y"}:
+        return "3"
+    return _shape_code(_shape_auroradb_type(shape))
 
 
 def _format_shape_value(value: str | float | int, *, source_unit: str | None) -> str:
@@ -1374,6 +1565,8 @@ def _component_flip_flags(
     if placement is not None:
         return placement.flip_x, placement.flip_y
     if _odbpp_component_needs_bottom_flip(component, source_format=source_format):
+        return False, True
+    if (source_format or "").casefold() == "aedb" and component.side == "bottom":
         return False, True
     return False, False
 

@@ -210,7 +210,8 @@ def _source_rotations_are_clockwise(source_format: str | None) -> bool:
 
 
 def _normalize_degree(value: float) -> float:
-    return (float(value) + 180.0) % 360.0 - 180.0
+    normalized = (float(value) + 180.0) % 360.0 - 180.0
+    return 180.0 if abs(normalized + 180.0) < 1e-9 else normalized
 
 
 @lru_cache(maxsize=262144)

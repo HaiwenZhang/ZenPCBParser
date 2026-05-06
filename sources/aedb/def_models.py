@@ -68,11 +68,13 @@ class AEDBDefBinaryBlockSummary(AEDBDefBinarySchemaModel):
 
 
 class AEDBDefBinaryDomainSummary(AEDBDefBinarySchemaModel):
+    layout_net_count: int
     material_count: int
     stackup_layer_count: int
     board_metal_layer_count: int
     dielectric_layer_count: int
     padstack_count: int
+    padstack_instance_definition_count: int = 0
     padstack_layer_pad_count: int
     multilayer_padstack_count: int
     component_definition_count: int
@@ -81,8 +83,16 @@ class AEDBDefBinaryDomainSummary(AEDBDefBinarySchemaModel):
     component_part_candidate_count: int
 
 
+class AEDBDefBinaryLayoutNetDefinition(AEDBDefBinarySchemaModel):
+    index: int
+    name: str
+
+
 class AEDBDefBinaryMaterialDefinition(AEDBDefBinarySchemaModel):
     name: str
+    conductivity: str | None = None
+    permittivity: str | None = None
+    dielectric_loss_tangent: str | None = None
     record_index: int
 
 
@@ -102,15 +112,46 @@ class AEDBDefBinaryPadstackLayerPad(AEDBDefBinarySchemaModel):
     layer_name: str | None = None
     id: int | None = None
     pad_shape: str | None = None
+    pad_parameters: list[str] = Field(default_factory=list)
+    pad_offset_x: str | None = None
+    pad_offset_y: str | None = None
+    pad_rotation: str | None = None
     antipad_shape: str | None = None
+    antipad_parameters: list[str] = Field(default_factory=list)
+    antipad_offset_x: str | None = None
+    antipad_offset_y: str | None = None
+    antipad_rotation: str | None = None
     thermal_shape: str | None = None
+    thermal_parameters: list[str] = Field(default_factory=list)
+    thermal_offset_x: str | None = None
+    thermal_offset_y: str | None = None
+    thermal_rotation: str | None = None
 
 
 class AEDBDefBinaryPadstackDefinition(AEDBDefBinarySchemaModel):
     id: int | None = None
     name: str | None = None
+    hole_shape: str | None = None
+    hole_parameters: list[str] = Field(default_factory=list)
+    hole_offset_x: str | None = None
+    hole_offset_y: str | None = None
+    hole_rotation: str | None = None
     layer_pads: list[AEDBDefBinaryPadstackLayerPad] = Field(default_factory=list)
     record_index: int
+
+
+class AEDBDefBinaryPadstackInstanceDefinitionRecord(AEDBDefBinarySchemaModel):
+    record_index: int
+    raw_definition_index: int
+    padstack_id: int | None = None
+    padstack_name: str | None = None
+    first_layer_id: int | None = None
+    first_layer_name: str | None = None
+    last_layer_id: int | None = None
+    last_layer_name: str | None = None
+    first_layer_positive: bool | None = None
+    solder_ball_layer_id: int | None = None
+    solder_ball_layer_name: str | None = None
 
 
 class AEDBDefBinaryComponentPinDefinition(AEDBDefBinarySchemaModel):
@@ -163,6 +204,11 @@ class AEDBDefBinaryStringSummary(AEDBDefBinarySchemaModel):
 
 
 class AEDBDefBinaryGeometrySummary(AEDBDefBinarySchemaModel):
+    padstack_instance_record_count: int
+    component_pin_padstack_instance_record_count: int
+    named_via_padstack_instance_record_count: int
+    unnamed_padstack_instance_record_count: int
+    padstack_instance_secondary_name_count: int
     via_record_count: int
     named_via_record_count: int
     unnamed_via_record_count: int
@@ -174,20 +220,93 @@ class AEDBDefBinaryGeometrySummary(AEDBDefBinarySchemaModel):
     path_arc_segment_count: int
     path_segment_count: int
     path_width_count: int
+    polygon_record_count: int
+    polygon_outer_record_count: int
+    polygon_void_record_count: int
+    polygon_point_count: int
+    polygon_arc_segment_count: int
+
+
+class AEDBDefBinaryPadstackInstanceRecord(AEDBDefBinarySchemaModel):
+    offset: int
+    geometry_id: int
+    name: str
+    name_kind: str
+    net_index: int | None = None
+    net_name: str | None = None
+    raw_owner_index: int | None = None
+    raw_definition_index: int | None = None
+    x: float
+    y: float
+    rotation: float
+    drill_diameter: float | None = None
+    secondary_name: str | None = None
+    secondary_id: int | None = None
+
+
+class AEDBDefBinaryPathItem(AEDBDefBinarySchemaModel):
+    kind: str
+    x: float | None = None
+    y: float | None = None
+    arc_height: float | None = None
+
+
+class AEDBDefBinaryPathRecord(AEDBDefBinarySchemaModel):
+    offset: int
+    geometry_id: int | None = None
+    net_index: int | None = None
+    net_name: str | None = None
+    layer_id: int | None = None
+    layer_name: str | None = None
+    named: bool
+    width: float
+    item_count: int
+    point_count: int
+    line_segment_count: int
+    arc_segment_count: int
+    items: list[AEDBDefBinaryPathItem] = Field(default_factory=list)
+
+
+class AEDBDefBinaryPolygonRecord(AEDBDefBinarySchemaModel):
+    offset: int
+    count_offset: int
+    coordinate_offset: int
+    geometry_id: int | None = None
+    parent_geometry_id: int | None = None
+    is_void: bool
+    layer_id: int | None = None
+    layer_name: str | None = None
+    net_index: int | None = None
+    net_name: str | None = None
+    item_count: int
+    point_count: int
+    arc_segment_count: int
+    items: list[AEDBDefBinaryPathItem] = Field(default_factory=list)
 
 
 class AEDBDefBinaryDomain(AEDBDefBinarySchemaModel):
     summary: AEDBDefBinaryDomainSummary
+    layout_nets: list[AEDBDefBinaryLayoutNetDefinition] = Field(default_factory=list)
     materials: list[AEDBDefBinaryMaterialDefinition] = Field(default_factory=list)
     stackup_layers: list[AEDBDefBinaryStackupLayer] = Field(default_factory=list)
     board_metal_layers: list[AEDBDefBinaryStackupLayer] = Field(default_factory=list)
     padstacks: list[AEDBDefBinaryPadstackDefinition] = Field(default_factory=list)
+    padstack_instance_definitions: list[
+        AEDBDefBinaryPadstackInstanceDefinitionRecord
+    ] = Field(default_factory=list)
     components: list[AEDBDefBinaryComponentDefinition] = Field(default_factory=list)
     component_placements: list[AEDBDefBinaryComponentPlacement] = Field(
         default_factory=list
     )
     binary_strings: AEDBDefBinaryStringSummary
     binary_geometry: AEDBDefBinaryGeometrySummary
+    binary_padstack_instance_records: list[AEDBDefBinaryPadstackInstanceRecord] = Field(
+        default_factory=list
+    )
+    binary_path_records: list[AEDBDefBinaryPathRecord] = Field(default_factory=list)
+    binary_polygon_records: list[AEDBDefBinaryPolygonRecord] = Field(
+        default_factory=list
+    )
 
 
 class AEDBDefBinaryLayout(AEDBDefBinarySchemaModel):

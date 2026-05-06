@@ -1,6 +1,6 @@
 [package]
 name = "aedb_parser"
-version = "0.4.0"
+version = "0.13.0"
 edition = "2021"
 description = "AEDB DEF parser and writer core, CLI, and Python extension used by Aurora Translator"
 license = "MIT"

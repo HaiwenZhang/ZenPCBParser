@@ -56,8 +56,9 @@ from aurora_translator.targets.auroradb.geometry import (
     _primitive_layer_name,
     _primitive_commands,
     _semantic_layer_name,
+    _semantic_via_can_emit_as_net_via,
     _shape_auroradb_type,
-    _shape_code,
+    _shape_code_for_shape,
     _shape_command,
     _shape_geometry_payload,
     _trace_point_items,
@@ -88,11 +89,23 @@ _DEFAULT_SOURCE_UNIT = object()
 
 
 def _layout_unit(board: SemanticBoard) -> str:
+    if _is_aedb_def_binary_board(board):
+        return "mils"
     return _auroradb_output_unit(board.units)
 
 
 def _geometry_source_unit(board: SemanticBoard) -> str | None:
+    if _is_aedb_def_binary_board(board):
+        return board.units
     return _source_unit_for_auroradb_output(board.units)
+
+
+def _is_aedb_def_binary_board(board: SemanticBoard) -> bool:
+    metadata = getattr(board, "metadata", None)
+    return (
+        getattr(metadata, "source_format", None) == "aedb"
+        and (getattr(metadata, "source_step", None) or "").casefold() == "def-binary"
+    )
 
 
 def _resolved_source_unit(
@@ -219,7 +232,12 @@ def _build_direct_layout_package(
 
     emitted_net_vias: set[tuple[str, str, str, str, str]] = set()
     for via in board.vias:
-        if not via.net_id or not via.template_id or via.position is None:
+        if (
+            not _semantic_via_can_emit_as_net_via(via)
+            or not via.net_id
+            or not via.template_id
+            or via.position is None
+        ):
             continue
         net_name = net_names_by_id.get(via.net_id)
         via_template_id = via_template_ids.get(via.template_id)
@@ -326,7 +344,7 @@ def _direct_add_shape(
     if geometry is None:
         return
     builder.shape_list.add_item(
-        "IdName", [shape_id, _shape_code(_shape_auroradb_type(shape))]
+        "IdName", [shape_id, _shape_code_for_shape(shape)]
     )
     builder.shape_list.append(geometry.node)
 
@@ -472,6 +490,8 @@ def _direct_add_pad_shape(
     source_unit: str | None,
     source_format: str | None = None,
 ) -> bool:
+    if pad.geometry.get("suppress_shape_export"):
+        return False
     if not pad.net_id or pad.position is None:
         return False
     component = components_by_id.get(pad.component_id or "")
@@ -902,7 +922,12 @@ def _design_layout_lines(
 
     emitted_net_vias: set[tuple[str, str, str, str, str]] = set()
     for via in board.vias:
-        if not via.net_id or not via.template_id or via.position is None:
+        if (
+            not _semantic_via_can_emit_as_net_via(via)
+            or not via.net_id
+            or not via.template_id
+            or via.position is None
+        ):
             continue
         net_name = net_names_by_id.get(via.net_id)
         via_template_id = via_template_ids.get(via.template_id)

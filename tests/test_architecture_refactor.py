@@ -119,6 +119,7 @@ class ArchitectureRefactorTests(unittest.TestCase):
         from aurora_translator.targets.auroradb.geometry import (
             _arc_center,
             _arc_direction_flag,
+            _polygon_vertex_parts,
             _polygon_vertex_parts_from_arcs,
             _polygon_vertex_parts_from_raw_points,
         )
@@ -146,6 +147,12 @@ class ArchitectureRefactorTests(unittest.TestCase):
         self.assertEqual(
             mixed_parts, [["0", "0"], ["10", "0", "0", "0", "N"], ["10", "10"]]
         )
+
+        full_circle_parts = _polygon_vertex_parts(
+            {"raw_points": [[10, 0], [10, 0, 0, 0, "N"]]},
+            source_unit="mil",
+        )
+        self.assertEqual(full_circle_parts, [["10", "0"], ["10", "0", "0", "0", "N"]])
 
         arc_parts = _polygon_vertex_parts_from_arcs(
             [{"start": [0, 0], "end": [10, 0], "height": -5}],

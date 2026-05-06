@@ -454,9 +454,15 @@ mod tests {
 
     #[test]
     fn parses_public_def_cases() {
-        for name in ["fpc.def", "kb.def", "mb.def"] {
+        let mut checked = 0;
+        for name in ["DemoCase_LPDDR4.def", "fpc.def", "kb.def", "mb.def"] {
+            let source = fixture(name);
+            if !source.exists() {
+                continue;
+            }
+            checked += 1;
             let parsed = parse_def_file(
-                &fixture(name),
+                &source,
                 &ParseOptions {
                     include_details: true,
                 },
@@ -474,12 +480,18 @@ mod tests {
             assert_eq!(parsed.summary.encrypted, Some(false), "{name}");
             assert_eq!(parsed.summary.diagnostic_count, 0, "{name}");
         }
+        assert!(checked > 0, "no AEDB DEF fixtures were available");
     }
 
     #[test]
     fn roundtrip_public_def_cases_byte_identical() {
-        for name in ["fpc.def", "kb.def", "mb.def"] {
+        let mut checked = 0;
+        for name in ["DemoCase_LPDDR4.def", "fpc.def", "kb.def", "mb.def"] {
             let source = fixture(name);
+            if !source.exists() {
+                continue;
+            }
+            checked += 1;
             let parsed = parse_def_file(
                 &source,
                 &ParseOptions {
@@ -498,6 +510,7 @@ mod tests {
             let _ = fs::remove_file(&output);
             assert_eq!(original, roundtrip, "{name}");
         }
+        assert!(checked > 0, "no AEDB DEF fixtures were available");
     }
 
     #[test]

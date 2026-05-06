@@ -3,6 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal
 
+from pydantic import ValidationError
+
+from aurora_translator.sources.aedb.def_models import AEDBDefBinaryLayout
 from aurora_translator.sources.aedb.models import AEDBLayout
 from aurora_translator.sources.alg.models import ALGLayout
 from aurora_translator.sources.altium.models import AltiumLayout
@@ -11,6 +14,7 @@ from aurora_translator.sources.brd.models import BRDLayout
 from aurora_translator.sources.odbpp.models import ODBLayout
 from aurora_translator.semantic.adapters import (
     from_aedb,
+    from_aedb_def_binary,
     from_alg,
     from_altium,
     from_auroradb,
@@ -24,6 +28,7 @@ SourceFormat = Literal["aedb", "auroradb", "odbpp", "brd", "alg", "altium"]
 
 def to_semantic_board(
     payload: AEDBLayout
+    | AEDBDefBinaryLayout
     | AuroraDBModel
     | ODBLayout
     | BRDLayout
@@ -36,6 +41,8 @@ def to_semantic_board(
 
     if isinstance(payload, AEDBLayout):
         return from_aedb(payload, build_connectivity=build_connectivity)
+    if isinstance(payload, AEDBDefBinaryLayout):
+        return from_aedb_def_binary(payload, build_connectivity=build_connectivity)
     if isinstance(payload, AuroraDBModel):
         return from_auroradb(payload)
     if isinstance(payload, ODBLayout):
@@ -56,9 +63,16 @@ def from_json_file(
 
     text = Path(path).expanduser().read_text(encoding="utf-8-sig")
     if source_format == "aedb":
-        return from_aedb(
-            AEDBLayout.model_validate_json(text), build_connectivity=build_connectivity
-        )
+        try:
+            return from_aedb(
+                AEDBLayout.model_validate_json(text),
+                build_connectivity=build_connectivity,
+            )
+        except ValidationError:
+            return from_aedb_def_binary(
+                AEDBDefBinaryLayout.model_validate_json(text),
+                build_connectivity=build_connectivity,
+            )
     if source_format == "auroradb":
         return from_auroradb(AuroraDBModel.model_validate_json(text))
     if source_format == "odbpp":
